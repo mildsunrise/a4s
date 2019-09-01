@@ -30,7 +30,8 @@ function escape(str: string) {
     ).join('')
 }
 
-function getCanonicalURI(pathName: string, options?: CanonicalOptions) {
+/** Get canonical URL string (low-level) */
+export function getCanonicalURI(pathName: string, options?: CanonicalOptions) {
     let parts = pathName.split('/').map(unescape)
     if (!(options && options.dontNormalize)) {
         const newParts: string[] = []
@@ -53,7 +54,8 @@ function getCanonicalURI(pathName: string, options?: CanonicalOptions) {
     return parts.join('/')
 }
 
-function getCanonicalQuery(query: URLSearchParams | string | {[key: string]: string}) {
+/** Get canonical query string (low-level) */
+export function getCanonicalQuery(query: URLSearchParams | string | {[key: string]: string}) {
     const pquery = query instanceof URLSearchParams ?
         query : new URLSearchParams(query)
     const parts: string[] = []
@@ -70,7 +72,8 @@ function getCanonicalQuery(query: URLSearchParams | string | {[key: string]: str
     return parts.join('&')
 }
 
-function getCanonicalHeaders(headers: {[key: string]: string | string[]}) {
+/** Get canonical headers and signed header strings (low-level) */
+export function getCanonicalHeaders(headers: {[key: string]: string | string[]}) {
     const trim = (x: string) => x.trim().replace(/\s+/g, ' ')
     const normalized = new Map<string, string[]>()
     for (const key of Object.keys(headers)) {
@@ -86,7 +89,7 @@ function getCanonicalHeaders(headers: {[key: string]: string | string[]}) {
 }
 
 /**
- * Low-level function to generate a canonical request string.
+ * Function to generate a canonical request string.
  * Most users won't need to call this directly.
  *
  * **Important:** It's mandatory for 'Host' (HTTP/1.1) or ':authority' (HTTP/2) to
@@ -122,7 +125,7 @@ export function getCanonical(
 }
 
 /**
- * Low-level method to construct the value of the `Authorization`
+ * Method to construct the value of the `Authorization`
  * header from its data.
  */
 export function buildAuthorization(data: {
