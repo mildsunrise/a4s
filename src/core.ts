@@ -4,7 +4,7 @@
  * This module contains only common signing logic (i.e. not HTTP specific).
  */
 
-import { createHmac, BinaryLike } from 'crypto'
+import { createHmac } from 'crypto'
 
 export interface SignOptions {
     getSigningData?: GetSigningData
@@ -84,7 +84,7 @@ export function formatTimestamp(date?: Date) {
  * @param key The signing key obtained from {{getSigningData}}
  * @returns The binary signature
  */
-export const signString = (key: Buffer, sts: BinaryLike) =>
+export const signString = (key: Buffer, sts: string | Buffer) =>
     createHmac('sha256', key).update(sts).digest()
 
 /** Main algorithm ID */

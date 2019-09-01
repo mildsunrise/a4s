@@ -5,7 +5,7 @@ import { strictEqual, notStrictEqual } from 'assert'
 const readFile = promisify(fs.readFile)
 const readdir = promisify(fs.readdir)
 
-import { autoSignRequest } from '../src/signing_http'
+import { autoSignRequest } from '../src/http'
 
 const CREDENTIALS = {
     accessKey: 'AKIDEXAMPLE',

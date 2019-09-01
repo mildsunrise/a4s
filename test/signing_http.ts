@@ -1,4 +1,4 @@
-import { signRequest, autoSignRequest } from '../src/signing_http'
+import { signRequest, autoSignRequest } from '../src/http'
 import { strictEqual } from 'assert'
 
 {

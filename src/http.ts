@@ -13,8 +13,8 @@ import { unescape } from 'querystring'
 import { createHash } from 'crypto'
 import { RequestOptions } from 'http'
 
-import { formatTimestamp, sign, RelaxedCredentials, Credentials, MAIN_ALGORITHM, SignOptions } from './signing'
-import { parseHost, formatHost, DEFAULT_REGION } from './endpoint_utils'
+import { formatTimestamp, sign, RelaxedCredentials, Credentials, MAIN_ALGORITHM, SignOptions } from './core'
+import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
 
 interface CanonicalOptions {
     dontNormalize?: boolean

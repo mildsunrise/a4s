@@ -19,10 +19,10 @@
  *    **See {{signPolicy}}.**
  */
 
-import { getCanonical } from './signing_http'
+import { getCanonical } from './http'
 import { formatTimestamp, getSigningData, signString,
-    MAIN_ALGORITHM, RelaxedCredentials, Credentials, GetSigningData } from './signing'
-import { DEFAULT_REGION } from './endpoint_utils'
+    MAIN_ALGORITHM, RelaxedCredentials, Credentials, GetSigningData } from './core'
+import { DEFAULT_REGION } from './util/endpoint'
 
 export interface PolicySignOptions {
     timestamp?: string | Date

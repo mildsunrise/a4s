@@ -1,4 +1,4 @@
-import { signPolicy } from '../src/signing_s3'
+import { signPolicy } from '../src/s3'
 import { strictEqual, deepStrictEqual } from 'assert'
 
 {

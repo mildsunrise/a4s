@@ -5,7 +5,7 @@
 
 import { parse } from 'url'
 import { createServer, IncomingMessage, ServerResponse } from 'http'
-import { signPolicy } from '../src/signing_s3'
+import { signPolicy } from '../src/s3'
 import { randomBytes } from 'crypto'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
