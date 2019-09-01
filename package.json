@@ -1,0 +1,24 @@
+{
+  "name": "a4s",
+  "version": "1.0.0",
+  "description": "Framework for AWS v4 signing tasks",
+  "author": "Alba Mendez <me@alba.sh>",
+  "license": "GPL3",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "clean": "rm -rf dist",
+    "build": "tsc",
+    "test": "ts-node test"
+  },
+  "files": [
+    "dist"
+  ],
+  "dependencies": {
+    "@types/node": "^10.0.0"
+  },
+  "devDependencies": {
+    "ts-node": "^8.3.0",
+    "typescript": "^3.6.2"
+  }
+}
