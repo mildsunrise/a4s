@@ -3,21 +3,71 @@
   "version": "1.0.0",
   "description": "Framework for AWS v4 signing tasks",
   "author": "Alba Mendez <me@alba.sh>",
-  "license": "GPL3",
+  "keywords": [
+    "aws",
+    "amazon",
+    "sign",
+    "signing",
+    "aws4",
+    "signature",
+    "typescript"
+  ],
+  "license": "MIT",
   "main": "dist/index.js",
   "types": "dist/index.d.ts",
+  "engines": {
+    "node": ">=10.0.0"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/jmendeth/a4s.git"
+  },
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc",
-    "test": "ts-node test"
+    "test": "jest --coverage",
+    "test:watch": "jest --coverage --watch",
+    "report-coverage": "cat ./coverage/lcov.info | coveralls"
   },
   "files": [
     "dist"
   ],
+  "jest": {
+    "transform": {
+      ".(ts|tsx)": "ts-jest"
+    },
+    "testEnvironment": "node",
+    "testRegex": "(/__tests__/.*|\\.(test|spec))\\.(ts|tsx|js)$",
+    "moduleFileExtensions": [
+      "ts",
+      "tsx",
+      "js"
+    ],
+    "coveragePathIgnorePatterns": [
+      "/node_modules/",
+      "/test/",
+      "index.ts"
+    ],
+    "coverageThreshold": {
+      "global": {
+        "branches": 90,
+        "functions": 95,
+        "lines": 95,
+        "statements": 95
+      }
+    },
+    "collectCoverageFrom": [
+      "src/*.{js,ts}"
+    ]
+  },
   "dependencies": {
     "@types/node": "^10.0.0"
   },
   "devDependencies": {
+    "@types/jest": "^23.3.2",
+    "coveralls": "^3.0.2",
+    "jest": "^24.9.0",
+    "ts-jest": "^24.0.2",
     "ts-node": "^8.3.0",
     "typescript": "^3.6.2"
   }

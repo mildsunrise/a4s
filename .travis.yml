@@ -1,0 +1,19 @@
+language: node_js
+cache:
+    directories:
+        - ~/.npm
+notifications:
+    email: false
+node_js:
+    - '10.0'
+    - '10'
+    - '11'
+    - '12'
+script:
+    - npm run test && npm run build
+
+jobs:
+    include:
+        - stage: deploy
+            rvm: 2.4
+            script: npm run report-coverage

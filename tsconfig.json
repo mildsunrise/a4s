@@ -1,8 +1,8 @@
 {
   "compilerOptions": {
     "moduleResolution": "node",
-    "target": "es6",
     "module": "commonjs",
+    "target": "es2018",
     "lib": ["es2015", "es2016", "es2017"],
     "esModuleInterop": true,
     "strict": true,
@@ -10,7 +10,11 @@
     "strictBindCallApply": true,
     "strictNullChecks": true,
     "sourceMap": true,
-    "outDir": "dist"
+    "outDir": "dist",
+    "declaration": true,
+    "allowSyntheticDefaultImports": true,
+    "experimentalDecorators": true,
+    "emitDecoratorMetadata": true
   },
   "include": [
     "src"
