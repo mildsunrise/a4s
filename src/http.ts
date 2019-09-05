@@ -16,9 +16,14 @@ import { RequestOptions } from 'http'
 import { formatTimestamp, sign, RelaxedCredentials, Credentials, MAIN_ALGORITHM, SignOptions } from './core'
 import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
 
-interface CanonicalOptions {
+export interface CanonicalOptions {
     dontNormalize?: boolean
     onlyEncodeOnce?: boolean
+}
+
+export interface SignHTTPOptions {
+    /** Provide a timestamp without adding it as a header */
+    timestamp?: string
 }
 
 function escape(str: string) {
@@ -143,6 +148,48 @@ export function buildAuthorization(data: {
 }
 
 /**
+ * Method to parse an Authorization header. The Authorization
+ * should follow the syntax of {{buildAuthorization}} and
+ * must NOT contain additional fields (but may have them in
+ * any order). Note that no validation is done on any of the
+ * returned values other than signature (prior to parsing).
+ * @returns Header values (see {{buildAuthorization}} argument)
+ * @throws If there's a syntax error
+ */
+export function parseAuthorization(header: string) {
+    // FIXME: verify order, whitespace between =, and signature case doesn't matter
+    const split1 = (x: string, token: string) => {
+        const idx = x.indexOf(token)
+        if (idx === -1) {
+            throw new Error('Invalid authorization header structure')
+        }
+        return [ x.substring(0, idx), x.substring(idx + 1) ]
+    }
+
+    const parts = split1(header, ' ')
+    const rawFields = parts[1].split(',')
+    if (rawFields.length !== 3) {
+        throw new Error('Invalid authorization header (missing / extra fields)')
+    }
+    const fields = new Map(rawFields.map(x =>
+        split1(x, '=').map(v => v.trim()) as [string, string]))
+    if (!fields.has('Signature') || !fields.has('Credential') || !fields.has('SignedHeaders')) {
+        throw new Error('Invalid authorization header (missing / extra fields)')
+    }
+    if (!/^([0-9a-z]{2})+$/i.test(fields.get('Signature')!)) {
+        throw new Error('Invalid signature format')
+    }
+    return {
+        algorithm: parts[0].trim(),
+        credential: fields.get('Credential')!,
+        signedHeaders: fields.get('SignedHeaders')!,
+        signature: Buffer.from(fields.get('Signature')!, 'hex'),
+    }
+}
+
+const EMPTY_HASH = createHash('sha256').digest('hex')
+
+/**
  * High-level function that signs an HTTP request using
  * `AWS-HMAC-SHA256` by generating an `Authorization` header.
  * 
@@ -183,7 +230,7 @@ export function signRequest(
     },
     headers: {[key: string]: string | string[]},
     body?: string | Buffer | { hash: string },
-    options?: CanonicalOptions & SignOptions
+    options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
     const joined = (value: string | string[]) =>
         (typeof value === 'string') ? value : value.join(', ')
@@ -202,7 +249,7 @@ export function signRequest(
     }
 
     // Populate & validate timestamp header
-    let timestamp = normHeaders.get('x-amz-date')
+    let timestamp = (options || {}).timestamp || normHeaders.get('x-amz-date')
     if (timestamp) {
         if (!/\d{8}T\d{6}Z/.test(timestamp)) {
             throw new Error(`Invalid timestamp provided: ${timestamp}`)
@@ -212,7 +259,7 @@ export function signRequest(
     }
 
     // Obtain body hash
-    let bodyHash = 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855'
+    let bodyHash = EMPTY_HASH
     if (body) {
         bodyHash = (typeof (body as any).hash === 'string') ? (body as any).hash
             : createHash('sha256').update(body as any).digest('hex')
@@ -248,7 +295,7 @@ export function autoSignRequest(
     credentials: RelaxedCredentials,
     request: RequestOptions,
     body?: string | Buffer | { hash: string },
-    options?: CanonicalOptions & SignOptions
+    options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
     const path = request.path || '/'
     let pathSep = path.indexOf('?')
