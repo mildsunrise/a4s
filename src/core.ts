@@ -59,7 +59,7 @@ export function getSigningData(dateStamp: string, secretKey: string, regionName:
 getSigningData.makeSimpleCache = (): GetSigningData => {
     let key: string
     let value: SigningData
-    return function getSigningData(a, b, c, d) {
+    return function _cached_getSigningData(a, b, c, d) {
         const nkey = [a,b,c,d].join('/')
         if (key !== nkey) {
             [ key, value ] = [ nkey, getSigningData(a,b,c,d) ]
