@@ -41,7 +41,6 @@ export const S3_OPTIONS = {
 }
 
 export const PAYLOAD_UNSIGNED = 'UNSIGNED-PAYLOAD'
-export const PAYLOAD_STREAMING = 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD'
 
 const EMPTY_HASH = createHash('sha256').digest('hex')
 
