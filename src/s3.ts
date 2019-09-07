@@ -21,9 +21,9 @@ import { RequestOptions, OutgoingHttpHeaders } from 'http'
 import { URLSearchParams, URL } from 'url'
 import { createHash } from 'crypto'
 
-import { formatTimestamp, getSigningData, signString, sign, MAIN_ALGORITHM,
-    RelaxedCredentials, Credentials, GetSigningData, SignOptions, signDigest } from './core'
-import { getCanonical, signRequest, autoSignRequest, SignHTTPOptions, CanonicalOptions, getCanonicalHeaders } from './http'
+import { formatTimestamp, getSigningData, signString, signDigest, MAIN_ALGORITHM,
+    RelaxedCredentials, Credentials, GetSigningData, SignOptions } from './core'
+import { getCanonical, signRequest, autoSignRequest, SignHTTPOptions, CanonicalOptions, getCanonicalHeaders, parseAuthorization } from './http'
 import { DEFAULT_REGION, parseHost } from './util/endpoint'
 import { getHeader } from './util/headers'
 
@@ -35,11 +35,13 @@ export interface PolicySignOptions {
 /** Maximum value for the X-Amz-Expires query parameter */
 export const EXPIRES_MAX = 604800
 
+/** Option defaults for the S3 service */
 export const S3_OPTIONS = {
     dontNormalize: true,
     onlyEncodeOnce: true
 }
 
+/** Special value for payload digest, which indicates the payload is not signed */
 export const PAYLOAD_UNSIGNED = 'UNSIGNED-PAYLOAD'
 
 const EMPTY_HASH = createHash('sha256').digest('hex')
@@ -227,6 +229,8 @@ export function signURL(
  * See [this][construct-policy] for how to write the policy.
  * The policy shouldn't contain any authentication parameters (such
  * as `x-amz-date`); these will be added before signing it.
+ *
+ * For a working example of use, see `demo_s3_post`.
  *
  * @param credentials The IAM credentials to use for signing
  *                   (service name defaults to 's3', and the default region)

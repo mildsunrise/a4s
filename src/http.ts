@@ -289,7 +289,11 @@ export function signRequest(
  * Or, if you don't provide a hostname, it will be populated from
  * the `serviceName` (and `regionName` if present).
  *
- * @returns The passed request options object
+ * @param credentials Credentials to sign the request with
+ * @param request Request to sign
+ * @param body Request body
+ * @param options Other options
+ * @returns The passed request object
  */
 export function autoSignRequest(
     credentials: RelaxedCredentials,
@@ -308,7 +312,8 @@ export function autoSignRequest(
         if (!credentials.serviceName) {
             throw new Error('Neither hostname nor serviceName passed')
         }
-        host = request.hostname = formatHost(credentials.serviceName, credentials.regionName, request.port)
+        host = request.hostname = formatHost(credentials.serviceName,
+            credentials.regionName, request.port)
         credentials.regionName = credentials.regionName || DEFAULT_REGION
     } else if (!credentials.regionName || !credentials.serviceName) {
         credentials = {...parseHost(host), ...credentials}

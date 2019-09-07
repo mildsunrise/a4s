@@ -1,5 +1,5 @@
 /**
- * Demo CLI tool that presigns the passed S3 URL.
+ * Demo CLI tool that makes a LIST request to a bucket.
  */
 
 import { URL } from 'url'
