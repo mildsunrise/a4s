@@ -17,7 +17,7 @@
  *    **See {{signPolicy}}.**
  */
 
-import { RequestOptions } from 'http'
+import { RequestOptions, OutgoingHttpHeaders } from 'http'
 import { URLSearchParams, URL } from 'url'
 import { createHash } from 'crypto'
 
@@ -25,6 +25,7 @@ import { formatTimestamp, getSigningData, signString, sign, MAIN_ALGORITHM,
     RelaxedCredentials, Credentials, GetSigningData, SignOptions, signDigest } from './core'
 import { getCanonical, signRequest, autoSignRequest, SignHTTPOptions, CanonicalOptions, getCanonicalHeaders } from './http'
 import { DEFAULT_REGION, parseHost } from './util/endpoint'
+import { getHeader } from './util/headers'
 
 export interface PolicySignOptions {
     timestamp?: string | Date
@@ -74,7 +75,8 @@ export function signRequestHeader(
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
     const hash = hashBody(body)
-    const newHeaders = { 'x-amz-content-sha256': hash }
+    const newHeaders: {[key: string]: string} = {}
+    newHeaders[getHeader(headers, 'x-amz-content-sha256')[0]] = hash
     const authHeaders = signRequest(credentials, method, url,
         { ...headers, ...newHeaders }, { hash }, { ...S3_OPTIONS, ...options })
     return { ...newHeaders, ...authHeaders }
@@ -93,15 +95,11 @@ export function autoSignRequestHeader(
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
     const hash = hashBody(body)
-    const newHeaders = { 'x-amz-content-sha256': hash }
-    request = {...request, headers: { ...request.headers, ...newHeaders } }
-    const authHeaders = autoSignRequest(credentials, request,
-        { hash }, { ...S3_OPTIONS, ...options })
-    return { ...newHeaders, ...authHeaders }
-}
-
-export function signRequestHeaderChunked() {
-
+    const headers: OutgoingHttpHeaders = { ...request.headers }
+    request.headers = headers
+    headers[getHeader(headers, 'x-amz-content-sha256')[0]] = hash
+    return autoSignRequest(credentials, request, { hash },
+        { ...S3_OPTIONS, ...options })
 }
 
 /**
@@ -140,16 +138,12 @@ export function signRequestQuery(
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
     options = { ...S3_OPTIONS, ...options }
-    const joined = (value: string | string[]) =>
-        (typeof value === 'string') ? value : value.join(', ')
-    const normHeaders = new Map(
-        Object.keys(headers).map(x => [ x.toLowerCase(), joined(headers[x]) ]))
     const parsedUrl = typeof url === 'string' ? new URL(url) : url
     const query = new URLSearchParams(parsedUrl.searchParams)
     const newQuery: {[key: string]: string} = {}
 
     // Populate host header if necessary
-    let host = normHeaders.get('host') || normHeaders.get(':authority')
+    let host = getHeader(headers, 'host')[1] || getHeader(headers, ':authority')[1]
     if (!host) {
         if (!parsedUrl.host) {
             throw new Error('No host provided on headers nor URL')

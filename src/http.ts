@@ -11,10 +11,11 @@
 import { URL, URLSearchParams, parse } from 'url'
 import { unescape } from 'querystring'
 import { createHash } from 'crypto'
-import { RequestOptions } from 'http'
+import { RequestOptions, OutgoingHttpHeaders } from 'http'
 
 import { formatTimestamp, sign, RelaxedCredentials, Credentials, MAIN_ALGORITHM, SignOptions } from './core'
 import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
+import { getHeader } from './util/headers'
 
 export interface CanonicalOptions {
     dontNormalize?: boolean
@@ -78,18 +79,21 @@ export function getCanonicalQuery(query: URLSearchParams | string | {[key: strin
 }
 
 /** Get canonical headers and signed header strings (low-level) */
-export function getCanonicalHeaders(headers: {[key: string]: string | string[]}) {
+export function getCanonicalHeaders(headers: OutgoingHttpHeaders) {
     const trim = (x: string) => x.trim().replace(/\s+/g, ' ')
-    const normalized = new Map<string, string[]>()
+    const normalized: {[key: string]: string} = {}
     for (const key of Object.keys(headers)) {
-        const name = trim(key).toLowerCase()
+        const name = key.toLowerCase()
+        if ({}.hasOwnProperty.call(normalized, name)) {
+            throw new Error(`Duplicate headers found: '${name}'`)
+        }
         const value = headers[key]
-        const values = typeof value === 'string' ? [value] : value
-        normalized.set(name, (normalized.get(name) || []).concat(values.map(trim)))
+        normalized[name] = value instanceof Array ?
+            value.map(trim).join(',') : trim(value + '')
     }
-    const signedHeaders = Array.from(normalized.keys()).sort()
+    const signedHeaders = Object.keys(normalized).sort()
     const canonicalHeaders = signedHeaders.map(k =>
-        `${k}:${normalized.get(k)!.join(',')}\n`).join('')
+        `${k}:${normalized[k]}\n`).join('')
     return [ canonicalHeaders, signedHeaders.join(';') ]
 }
 
@@ -113,7 +117,7 @@ export function getCanonical(
     method: string,
     pathName: string,
     query: URLSearchParams | string | {[key: string]: string},
-    headers: {[key: string]: string | string[]},
+    headers: OutgoingHttpHeaders,
     bodyHash: string,
     options?: CanonicalOptions
 ) {
@@ -228,19 +232,15 @@ export function signRequest(
         pathname: string
         searchParams: URLSearchParams | string | {[key: string]: string}
     },
-    headers: {[key: string]: string | string[]},
+    headers: OutgoingHttpHeaders,
     body?: string | Buffer | { hash: string },
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
-    const joined = (value: string | string[]) =>
-        (typeof value === 'string') ? value : value.join(', ')
-    const normHeaders = new Map(
-        Object.keys(headers).map(x => [ x.toLowerCase(), joined(headers[x]) ]))
     const parsedUrl = typeof url === 'string' ? new URL(url) : url
     const newHeaders: {[key: string]: string} = {}
 
     // Populate host header if necessary
-    let host = normHeaders.get('host') || normHeaders.get(':authority')
+    let host = getHeader(headers, 'host')[1] || getHeader(headers, ':authority')[1]
     if (!host) {
         if (!parsedUrl.host) {
             throw new Error('No host provided on headers nor URL')
@@ -249,7 +249,7 @@ export function signRequest(
     }
 
     // Populate & validate timestamp header
-    let timestamp = (options || {}).timestamp || normHeaders.get('x-amz-date')
+    let timestamp = (options || {}).timestamp || getHeader(headers, 'x-amz-date')[1]
     if (timestamp) {
         if (!/\d{8}T\d{6}Z/.test(timestamp)) {
             throw new Error(`Invalid timestamp provided: ${timestamp}`)
@@ -314,19 +314,9 @@ export function autoSignRequest(
         credentials = {...parseHost(host), ...credentials}
     }
 
-    const headers: {[key: string]: string | string[]} = {}
-    for (const key of Object.keys(request.headers || {})) {
-        const value = request.headers![key]
-        if (typeof value === 'string' || value instanceof Array) {
-            headers[key] = value
-        } else {
-            headers[key] = '' + value
-        }
-    }
-
     const newHeaders = signRequest(credentials as Credentials,
         request.method || 'GET', { host, pathname, searchParams },
-        headers, body, options)
+        request.headers || {}, body, options)
     request.headers = {...request.headers, ...newHeaders}
     return request
 }
