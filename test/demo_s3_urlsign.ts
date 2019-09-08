@@ -2,7 +2,7 @@
  * Demo CLI tool that presigns the passed S3 URL.
  */
 
-import { signURL } from '../src/s3'
+import { signS3Request } from '../src/s3'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
@@ -13,4 +13,6 @@ if (!accessKey || !secretKey || args.length !== 1) {
     process.exit(1)
 }
 
-console.log('Presigned URL:', signURL({ accessKey, secretKey }, args[0]))
+const request = { url: args[0] }
+signS3Request({ accessKey, secretKey }, request, { query: true, set: true })
+console.log('Presigned URL:', request.url)

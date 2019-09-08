@@ -9,10 +9,9 @@
 import { promisify } from 'util'
 import * as fs from 'fs'
 import { join, basename } from 'path'
-import { createHash } from 'crypto'
 const readFile = promisify(fs.readFile)
 
-import { autoSignRequest, getCanonical } from '../src/http'
+import { signRequest, getCanonical, getCanonicalHeaders } from '../src/http'
 
 describe('AWS test suite', () => {
     const CREDENTIALS = {
@@ -34,14 +33,14 @@ describe('AWS test suite', () => {
             const [ expCanonical, expAuthorization ] = files.slice(1)
 
             const [ pathname, query ] = /^([^?]*)(\?.*)?$/.exec(input.path)!.slice(1)
-            const bodyHash = createHash('sha256').update(input.body || '').digest('hex')
-            const { canonical } = getCanonical(input.method, pathname, query || '', input.headers, bodyHash)
+            const canonical = getCanonical(input.method, pathname, query || '',
+                getCanonicalHeaders(input.headers), input.body)
             expect(canonical).toBe(expCanonical)
 
-            const hostname = input.headers['Host'][0]
-            const request = {...input, hostname}
-            autoSignRequest(CREDENTIALS, request, input.body)
-            expect(request.headers['authorization']).toBe(expAuthorization)
+            const host = input.headers['Host'][0]
+            const request = { ...input, url: `https://${host}${input.path}` }
+            const result = signRequest(CREDENTIALS, request)
+            expect(result['authorization']).toBe(expAuthorization)
         })
     }
 

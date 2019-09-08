@@ -44,6 +44,8 @@ export function formatDate(date?: Date) {
  * 
  * `dateStamp` can be created with {{formatDate}}. Because it's cropped
  * to 8 characters, a full timestamp (see {{formatTimestamp}}) also works.
+ * 
+ * @returns Signing data (key and credentials scope)
  */
 export function getSigningData(dateStamp: string, secretKey: string, regionName: string, serviceName: string): SigningData {
     dateStamp = dateStamp.substring(0, 8)
@@ -105,9 +107,23 @@ export const signDigest = (algorithm: string, payloadDigest: string,
         [algorithm, timestamp, signing.scope, payloadDigest].join('\n'))
 
 /**
- * High-level function that uses {{getSigningData}} to derive
- * signing key / scope, and then {{signDigest}} to calculate
- * the signature.
+ * Convenience version of {{getSigningData}} that accepts a
+ * `Credentials` object, and also returns a credential string.
+ *
+ * @param dateStamp The timestamp / date stamp
+ * @param credentials Credentials to derive from
+ * @returns Signing data and credential string
+ */
+export function getSigning(dateStamp: string, credentials: Credentials, options?: SignOptions) {
+    const { accessKey, secretKey, regionName, serviceName } = credentials
+    const derive = (options && options.getSigningData) || getSigningData
+    const signing = derive(dateStamp, secretKey, regionName, serviceName)
+    return { signing, credential: `${accessKey}/${signing.scope}` }
+}
+
+/**
+ * High-level function that uses {{getSigning}} to derive the
+ * signing key, and then {{signDigest}} to calculate the signature.
  *
  * @param credentials Info to derive key and credentials scope
  * @param algorithm Algorithm used for calculating `payloadDigest`, i.e. `AWS4-HMAC-SHA256`
@@ -116,9 +132,7 @@ export const signDigest = (algorithm: string, payloadDigest: string,
  * @returns The signature and credential string
  */
 export function sign(credentials: Credentials, algorithm: string, payloadDigest: string, timestamp: string, options?: SignOptions) {
-    const { accessKey, secretKey, regionName, serviceName } = credentials
-    const derive = (options && options.getSigningData) || getSigningData
-    const signing = derive(timestamp, secretKey, regionName, serviceName)
+    const { signing, credential } = getSigning(timestamp, credentials, options)
     const signature = signDigest(algorithm, payloadDigest, timestamp, signing)
-    return { signature, credential: `${accessKey}/${signing.scope}` }
+    return { signature, credential }
 }

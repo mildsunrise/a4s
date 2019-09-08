@@ -1,35 +1,28 @@
 /**
- * This module contains signing logic that is specific for the S3 service.
+ * This module contains signing logic that is specific for the S3
+ * service, see {{signS3Request}}.
  *
- *  - `Authorization`-based signing: The process is the same as for any
- *    other HTTP request, but path normalization & double encoding must be
- *    disabled and the `x-amz-content-sha256` header must be present.  
- *    **See {{signRequestHeader}} and {{autoSignRequestHeader}}**.
- *
- *  - Query-based signing (presigned URLs): the process is the same as
- *    above, except that instead of headers, query parameters are added
- *    to sign the request.  
- *    **See {{signRequestQuery}}, {{autoSignRequestQuery}} and {{signURL}}.**
- *
- *  - Additionally there's POST form parameter authentication,
- *    which is designed mainly to allow users to upload files
- *    to S3 directly from their browser.  
- *    **See {{signPolicy}}.**
+ * Additionally there's POST form parameter authentication,
+ * which is designed mainly to allow users to upload files
+ * to S3 directly from their browser. See {{signS3Policy}}.
  */
 
-import { RequestOptions, OutgoingHttpHeaders } from 'http'
 import { URLSearchParams, URL } from 'url'
-import { createHash } from 'crypto'
 
-import { formatTimestamp, getSigningData, signString, signDigest, MAIN_ALGORITHM,
-    RelaxedCredentials, Credentials, GetSigningData, SignOptions } from './core'
-import { getCanonical, signRequest, autoSignRequest, SignHTTPOptions, CanonicalOptions, getCanonicalHeaders, parseAuthorization } from './http'
-import { DEFAULT_REGION, parseHost } from './util/endpoint'
+import { formatTimestamp, getSigning, signString, MAIN_ALGORITHM,
+    RelaxedCredentials, GetSigningData, SignOptions } from './core'
+import { hashBody, signRequest, SignHTTPOptions, CanonicalOptions, SignedRequest } from './http'
+import { DEFAULT_REGION } from './util/endpoint'
 import { getHeader } from './util/headers'
 
 export interface PolicySignOptions {
     timestamp?: string | Date
     getSigningData?: GetSigningData
+}
+
+export interface SignedS3Request extends SignedRequest {
+    /** If set to true, the hash will be set to true */
+    unsigned?: boolean
 }
 
 /** Maximum value for the X-Amz-Expires query parameter */
@@ -44,179 +37,99 @@ export const S3_OPTIONS = {
 /** Special value for payload digest, which indicates the payload is not signed */
 export const PAYLOAD_UNSIGNED = 'UNSIGNED-PAYLOAD'
 
-const EMPTY_HASH = createHash('sha256').digest('hex')
-
-function hashBody(body?: false | string | Buffer | { hash: string }) {
-    if (body === false) {
-        return PAYLOAD_UNSIGNED
-    }
-    if (!body) {
-        return EMPTY_HASH
-    }
-    return (typeof (body as any).hash === 'string') ? (body as any).hash
-        : createHash('sha256').update(body as any).digest('hex')
-}
-
-/**
- * Calls {{signRequest}} setting the correct options for S3,
- * and adds an `x-amz-content-sha256` header.
- *
- * Pass `false` as body to create an unsigned payload signature.
- */
-export function signRequestHeader(
-    credentials: Credentials,
-    method: string,
-    url: string | {
-        host?: string
-        pathname: string
-        searchParams: URLSearchParams | string | {[key: string]: string}
-    },
-    headers: {[key: string]: string | string[]},
-    body?: false | string | Buffer | { hash: string },
-    options?: SignHTTPOptions & CanonicalOptions & SignOptions
+function patchURL(
+    request: SignedS3Request,
+    extra: {[key: string]: string},
+    url: { host?: string, pathname?: string, searchParams?: URLSearchParams },
+    set?: boolean
 ) {
-    const hash = hashBody(body)
-    const newHeaders: {[key: string]: string} = {}
-    newHeaders[getHeader(headers, 'x-amz-content-sha256')[0]] = hash
-    const authHeaders = signRequest(credentials, method, url,
-        { ...headers, ...newHeaders }, { hash }, { ...S3_OPTIONS, ...options })
-    return { ...newHeaders, ...authHeaders }
-}
-
-/**
- * Calls {{autoSignRequest}} setting the correct options for S3,
- * and adds an `x-amz-content-sha256` header.
- *
- * Pass `false` as body to create an unsigned payload signature.
- */
-export function autoSignRequestHeader(
-    credentials: RelaxedCredentials,
-    request: RequestOptions,
-    body?: false | string | Buffer | { hash: string },
-    options?: SignHTTPOptions & CanonicalOptions & SignOptions
-) {
-    const hash = hashBody(body)
-    const headers: OutgoingHttpHeaders = { ...request.headers }
-    request.headers = headers
-    headers[getHeader(headers, 'x-amz-content-sha256')[0]] = hash
-    return autoSignRequest(credentials, request, { hash },
-        { ...S3_OPTIONS, ...options })
-}
-
-/**
- * High-level function that signs an HTTP request using
- * `AWS-HMAC-SHA256` but using query parameters (i.e. presigned
- * URL) instead of headers.
- * 
- * The usage and behaviour is the same as for {{signRequest}}, except:
- * 
- *  - Instead of looking for an `X-Amz-Date` header, it looks
- *    for a query parameter of that name.
- *  - Instead of returning headers (such as `Authorization`),
- *    it returns parameters to add to the query. `X-Aws-Expires`
- *    is set to EXPIRES_MAX if not present.
- *  - It uses different option defaults (for S3) and there's
- *    no `body` parameter (payload can't be signed through query).
- *
- * @param credentials Credentials to sign the request with
- * @param method HTTP method
- * @param url An object containing the pathname and the query string,
- *            and optionally the hostname (if a string is passed,
- *            it will be parsed using `url.URL`)
- * @param headers HTTP headers to sign
- * @param options Other options
- * @returns Object with query parameters to add to the URL
- */
-export function signRequestQuery(
-    credentials: Credentials,
-    method: string,
-    url: string | {
-        host?: string
-        pathname: string
-        searchParams: URLSearchParams | string | {[key: string]: string}
-    },
-    headers: {[key: string]: string | string[]},
-    options?: SignHTTPOptions & CanonicalOptions & SignOptions
-) {
-    options = { ...S3_OPTIONS, ...options }
-    const parsedUrl = typeof url === 'string' ? new URL(url) : url
-    const query = new URLSearchParams(parsedUrl.searchParams)
-    const newQuery: {[key: string]: string} = {}
-
-    // Populate host header if necessary
-    let host = getHeader(headers, 'host')[1] || getHeader(headers, ':authority')[1]
-    if (!host) {
-        if (!parsedUrl.host) {
-            throw new Error('No host provided on headers nor URL')
-        }
-        host = parsedUrl.host
-        headers = { ...headers, host }
-    }
-
-    // Populate & validate timestamp parameter
-    let timestamp = (options || {}).timestamp || query.get('X-Amz-Date')
-    if (timestamp) {
-        if (!/\d{8}T\d{6}Z/.test(timestamp)) {
-            throw new Error(`Invalid timestamp provided: ${timestamp}`)
+    if (set || request.url !== url) {
+        if (!url.searchParams) {
+            url.searchParams = new URLSearchParams()
         }
     } else {
-        timestamp = newQuery['X-Amz-Date'] = formatTimestamp()
+        const { host, pathname, searchParams } = url
+        url = { host, pathname, searchParams: new URLSearchParams(searchParams) }
     }
+    Object.keys(extra).forEach(k => url.searchParams!.append(k, extra[k]))
+    return url
+}
 
-    // Derive key and set parameters
-    const { accessKey, secretKey, regionName, serviceName } = credentials
-    const derive = (options && options.getSigningData) || getSigningData
-    const signing = derive(timestamp, secretKey,
-        regionName || DEFAULT_REGION, serviceName || 's3')
-    newQuery['X-Amz-Algorithm'] = MAIN_ALGORITHM
-    newQuery['X-Amz-Credential'] = `${accessKey}/${signing.scope}`
-
-    // Set other needed parameters
-    newQuery['X-Amz-SignedHeaders'] = getCanonicalHeaders(headers)[1]
-    if (!query.has('X-Amz-Expires')) {
-        newQuery['X-Amz-Expires'] = EXPIRES_MAX.toString()
-    }
-
-    // Build canonical string, get digest, calculate signature
-    Object.keys(newQuery).forEach(k => query.append(k, newQuery[k]))
-    const { canonical } = getCanonical(
-        method, parsedUrl.pathname, query, headers, PAYLOAD_UNSIGNED, options)
-    const digest = createHash('sha256').update(canonical).digest('hex')
-    const signature = signDigest(MAIN_ALGORITHM, digest, timestamp, signing)
-
-    newQuery['X-Amz-Signature'] = signature.toString('hex')
-    return newQuery
+function patchHeaders(
+    request: SignedS3Request,
+    extra: {[key: string]: string},
+    set?: boolean
+) {
+    const headers = set ?
+        (request.headers = request.headers || {}) : { ...request.headers }
+    Object.keys(extra).forEach(k => { headers[k] = extra[k] })
+    return headers
 }
 
 /**
- * Convenience function to presign a URL using {{signRequestQuery}}.
+ * High-level function that signs an HTTP request for S3 using
+ * `AWS-HMAC-SHA256` with either headers (`Authorization`) or query
+ * parameters (presigned URL) depending on the `query` option.
+ * 
+ * This is a special version of {{signRequest}} that implements
+ * some special quirks needed for S3:
+ * 
+ *  - For header authorization, the `x-amz-content-sha256` is
+ *    set to the body hash used to calculate the signature.
+ *    Also, you can set `unsigned` in the request to set hash
+ *    to `UNSIGNED_PAYLOAD`.
+ *
+ *  - For query authorization, the `X-Amz-Expires` parameter is
+ *    set to `EXPIRES_MAX` if not present. The body hash is set to
+ *    `UNSIGNED_PAYLOAD` (for S3, query authorization can't sign the body).
+ *
+ *  - `S3_OPTIONS` are applied by default (disables normalization
+ *    and double encoding for pathname when calculating signature)
+ *    and `serviceName` defaults to `s3` if host was not passed.
+ *
+ * The extra parameters are returned with the others, and also
+ * set if requested.
  * 
  * @param credentials Credentials to sign the request with
- * @param url URL to sign
+ * @param request HTTP request to sign, see {{SignedS3Request}}
  * @param options Other options
+ * @returns Authorization headers / query parameters
  */
-export function signURL(
-    credentials: RelaxedCredentials,
-    url: string | URL,
-    options?: {
-        method?: string,
-        headers?: {[key: string]: string | string[]},
-    } & SignHTTPOptions & CanonicalOptions & SignOptions
+export function signS3Request(
+   credentials: RelaxedCredentials,
+   request: SignedS3Request,
+   options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
-    options = options || {}
-    url = (typeof url === 'string') ? new URL(url) : url
-    if (!url.host) {
-        throw new Error('URL to sign needs to have a hostname')
+    let { url, body, unsigned, headers } = request
+    url = typeof url === 'string' ? new URL(url) : url
+    const originalRequest = request
+    const extra: {[key: string]: string} = {}
+
+    if (options && options.query) {
+        body = unsigned === false ? body : { hash: PAYLOAD_UNSIGNED }
+        if (!(url.searchParams && url.searchParams.has('X-Amz-Expires'))) {
+            extra['X-Amz-Expires'] = EXPIRES_MAX.toString()
+            url = patchURL(request, extra, url, options && options.set)
+        }
+        request = { ...request, url, body }
+    } else {
+        const hash = unsigned ? PAYLOAD_UNSIGNED : hashBody(body, options)
+        if (!getHeader(headers, 'x-amz-content-sha256')[1]) {
+            extra['x-amz-content-sha256'] = hash
+            headers = patchHeaders(request, extra, options && options.set)
+        }
+        request = { ...request, url, headers, body: { hash } }
     }
-    if (!credentials.serviceName || !credentials.regionName) {
-        credentials = { ...parseHost(url.host), ...credentials }
+
+    if (typeof request.url !== 'string' && !request.url.host) {
+        credentials = { serviceName: 's3', ...credentials }
     }
-    const query = new URLSearchParams(url.searchParams)
-    const newQuery = signRequestQuery(credentials as Credentials,
-        options.method || 'GET', url, options.headers || {}, options)
-    Object.keys(newQuery).forEach(k => query.append(k, newQuery[k]))
-    url.search = query.toString()
-    return url.toString()
+    const result = { ...extra, ...signRequest(
+        credentials, request, { ...S3_OPTIONS, ...options }) }
+    if (typeof originalRequest.url === 'string') {
+        originalRequest.url = (url as URL).toString()
+    }
+    return result
 }
 
 /**
@@ -243,23 +156,21 @@ export function signURL(
  * [construct-policy]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
  * [policy-auth]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-authentication-HTTPPOST.html
  */
-export function signPolicy(
+export function signS3Policy(
     credentials: RelaxedCredentials,
     policy: any,
     options?: PolicySignOptions
 ): {[key: string]: string} {
-    const { accessKey, secretKey, regionName, serviceName } = credentials
-    const derive = (options && options.getSigningData) || getSigningData
     const ts = options && options.timestamp
+    const cr = { serviceName: 's3', regionName: DEFAULT_REGION, ...credentials }
 
     // Get timestamp, derive key, prepare form fields
     const timestamp = (typeof ts === 'string') ? ts : formatTimestamp(ts)
-    const { key, scope } = derive(timestamp, secretKey,
-        regionName || DEFAULT_REGION, serviceName || 's3')
+    const { signing, credential } = getSigning(timestamp, cr, options)
     const fields: {[key: string]: string} = {
         'x-amz-date': timestamp,
         'x-amz-algorithm': MAIN_ALGORITHM,
-        'x-amz-credential': `${accessKey}/${scope}`,
+        'x-amz-credential': credential,
     }
 
     // Add the fields to the policy conditions
@@ -269,7 +180,7 @@ export function signPolicy(
 
     // Encode and sign the policy
     const encodedPolicy = Buffer.from(finalPolicy).toString('base64')
-    const signature = signString(key, encodedPolicy).toString('hex')
+    const signature = signString(signing.key, encodedPolicy).toString('hex')
 
     return { ...fields, 'policy': encodedPolicy, 'x-amz-signature': signature }
 }

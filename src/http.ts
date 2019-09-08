@@ -1,19 +1,20 @@
 /**
- * Code for signing HTTP requests through Authorization header.
- * This module calculates the canonical request (and its digest
- * for signing), and also builds the resulting `Authorization`
- * header. It also provides high-level methods that do the whole
- * process.
+ * Code for signing HTTP requests, either through headers (`Authorization`)
+ * or through query parameters (presigned URLs).
+ * 
+ * This module calculates the canonical request (and its digest for signing),
+ * and also builds the `Authorization` header (or the query parameters).
+ * It also provides high-level methods that do the whole process.
  * 
  * See `signing` module for the actual signing logic.
  */
 
-import { URL, URLSearchParams, parse } from 'url'
+import { URL, URLSearchParams } from 'url'
 import { unescape } from 'querystring'
 import { createHash } from 'crypto'
-import { RequestOptions, OutgoingHttpHeaders } from 'http'
+import { OutgoingHttpHeaders } from 'http'
 
-import { formatTimestamp, sign, RelaxedCredentials, Credentials, MAIN_ALGORITHM, SignOptions } from './core'
+import { formatTimestamp, getSigning, signDigest, MAIN_ALGORITHM, RelaxedCredentials, Credentials, SignOptions } from './core'
 import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
 import { getHeader } from './util/headers'
 
@@ -23,8 +24,34 @@ export interface CanonicalOptions {
 }
 
 export interface SignHTTPOptions {
-    /** Provide a timestamp without adding it as a header */
-    timestamp?: string
+    /**
+     * Add the returned parameters to the passed headers (or searchParams,
+     * if query signing was requested)
+     */
+    set?: boolean
+    /**
+     * Return query authorization parameters instead of headers (the default)
+     */
+    query?: boolean
+}
+
+export interface SignedRequest {
+    /** HTTP method (default: GET) */
+    method?: string
+    /** Resource URL (if it's a string, it'll be parsed using `new URL()`) */
+    url: string | {
+        /** Host part of the URL, including port number */
+        host?: string
+        /** Pathname part of the URL (default: /) */
+        pathname?: string
+        /** Query parameters (default: empty) */
+        searchParams?: URLSearchParams
+    }
+    /** HTTP headers */
+    headers?: OutgoingHttpHeaders
+    /** Request body to calculate hash of (alternatively you may
+     * calculate it yourself and pass it as `{ hash: '<hex>' }`) */
+    body?: Buffer | string | { hash: string }
 }
 
 function escape(str: string) {
@@ -78,8 +105,12 @@ export function getCanonicalQuery(query: URLSearchParams | string | {[key: strin
     return parts.join('&')
 }
 
-/** Get canonical headers and signed header strings (low-level) */
-export function getCanonicalHeaders(headers: OutgoingHttpHeaders) {
+/**
+ * Get canonical headers and signed header strings (low-level)
+ * @param headers Headers object
+ * @returns Array with [ canonicalHeaders, signedHeaders ]
+ */
+export function getCanonicalHeaders(headers: OutgoingHttpHeaders): [string, string] {
     const trim = (x: string) => x.trim().replace(/\s+/g, ' ')
     const normalized: {[key: string]: string} = {}
     for (const key of Object.keys(headers)) {
@@ -97,6 +128,17 @@ export function getCanonicalHeaders(headers: OutgoingHttpHeaders) {
     return [ canonicalHeaders, signedHeaders.join(';') ]
 }
 
+const EMPTY_HASH = createHash('sha256').digest('hex')
+
+/** Produce the body hash to include in canonical request (low-level) */
+export function hashBody(body: SignedRequest["body"], options?: CanonicalOptions) {
+    if (!body) {
+        return EMPTY_HASH
+    }
+    return (typeof (body as any).hash === 'string') ? (body as any).hash
+        : createHash('sha256').update(body as any).digest('hex')
+}
+
 /**
  * Function to generate a canonical request string.
  * Most users won't need to call this directly.
@@ -105,32 +147,31 @@ export function getCanonicalHeaders(headers: OutgoingHttpHeaders) {
  * be present in `headers`. 
  * 
  * @param method HTTP method
- * @param pathName URL pathname (i.e. without query string)
+ * @param pathname URL pathname (i.e. without query string)
  * @param query Query parameters (if a string or object is provided, it will be parsed with `URLSearchParams`)
- * @param headers HTTP headers to include in the canonical request.
- * @param body Hash of the request's body, hex-encoded.
+ * @param cheaders Result of {{getCanonicalHeaders}}
+ * @param body Request body to calculate hash of (alternatively you may
+ *             calculate it yourself and pass it as `{ hash: '<hex>' }`)
  * @param options Other options
- * @returns An object containing `canonical` (the canonical request),
- *          and the `signedHeaders` string.
+ * @returns The canonical request string
  */
 export function getCanonical(
     method: string,
-    pathName: string,
+    pathname: string,
     query: URLSearchParams | string | {[key: string]: string},
-    headers: OutgoingHttpHeaders,
-    bodyHash: string,
+    cheaders: [ string, string ],
+    body: SignedRequest["body"],
     options?: CanonicalOptions
 ) {
-    const [ canonicalHeaders, signedHeaders ] = getCanonicalHeaders(headers)
-    const canonical = [
+    const [ canonicalHeaders, signedHeaders ] = cheaders
+    return [
         method.toUpperCase().trim(),
-        getCanonicalURI(pathName, options),
+        getCanonicalURI(pathname, options),
         getCanonicalQuery(query),
         canonicalHeaders,
         signedHeaders,
-        bodyHash,
+        hashBody(body, options),
     ].join('\n')
-    return { canonical, signedHeaders }
 }
 
 /**
@@ -191,137 +232,156 @@ export function parseAuthorization(header: string) {
     }
 }
 
-const EMPTY_HASH = createHash('sha256').digest('hex')
-
 /**
- * High-level function that signs an HTTP request using
- * `AWS-HMAC-SHA256` by generating an `Authorization` header.
- * 
- * This uses {{getCanonical}} to generate the canonical string,
- * obtains its digest, calculates the signature using `signing.sign()`
- * and constructs the header with {{buildAuthorization}}.
- * 
- * The method returns an object containing headers to be added to
- * the request. It contains at least the `Authorization` header, and:
- * 
- *  - If no `Host` or `:authority` header is present, a `Host` header
- *    is added based on `url` host. If neither was given, an error
- *    is thrown.
- *  - If no `X-Amz-Date` header is present, one is generated with
- *    {{formatTimestamp}}.
- * 
- * The format of the `x-amz-date` header is verified, and its
- * timestamp is used for signing.
+ * Signs an HTTP request using {{getCanonical}}, calculating
+ * its digest and signing it with {{signDigest}}. It then returns
+ * the generated parameters for header / query authorization.
  *
- * @param credentials Credentials to sign the request with
+ * The input parameters are never modified, regardless of the `set` option.
+ *
+ * The timestamp is taken from the `X-Amz-Date` header (or query parameter,
+ * if query signing is requested). If not present, it's generated with
+ * {{formatTimestamp}} and returned along with the other authorization
+ * parameters.
+ *
+ * This is a low-level function, it doesn't perform any normalization
+ * and assumes all required headers / parameters are there. Most
+ * users will want {{signRequest}} instead.
+ *
+ * @param credentials Credentials to sign request with
  * @param method HTTP method
- * @param url An object containing the pathname and the query string,
- *            and optionally the hostname (if a string is passed,
- *            it will be parsed using `url.URL`)
- * @param headers HTTP headers to sign
+ * @param pathname URL pathname (i.e. without query string)
+ * @param query Query parameters (if a string or object is provided, it will be parsed with `URLSearchParams`)
+ * @param headers HTTP headers to include in the canonical request.
  * @param body Request body to calculate hash of (alternatively you may
  *             calculate it yourself and pass it as `{ hash: '<hex>' }`)
  * @param options Other options
- * @returns Object with headers to add to the request
+ * @returns Authentication headers / query parameters
  */
-export function signRequest(
+export function signRequestRaw(
     credentials: Credentials,
     method: string,
-    url: string | {
-        host?: string
-        pathname: string
-        searchParams: URLSearchParams | string | {[key: string]: string}
-    },
+    pathname: string,
+    query: URLSearchParams,
     headers: OutgoingHttpHeaders,
-    body?: string | Buffer | { hash: string },
+    body: SignedRequest["body"],
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
-    const parsedUrl = typeof url === 'string' ? new URL(url) : url
-    const newHeaders: {[key: string]: string} = {}
+    const isQuery = options && options.query
+    const result: {[key: string]: string} = {}
 
-    // Populate host header if necessary
-    let host = getHeader(headers, 'host')[1] || getHeader(headers, ':authority')[1]
-    if (!host) {
-        if (!parsedUrl.host) {
-            throw new Error('No host provided on headers nor URL')
-        }
-        host = newHeaders['host'] = parsedUrl.host
+    // Extract / populate timestamp
+    let timestamp = isQuery ?
+        query.get('X-Amz-Date') : getHeader(headers, 'x-amz-date')[1]
+    if (!timestamp) {
+        const name = isQuery ? 'X-Amz-Date' : 'x-amz-date'
+        timestamp = result[name] = formatTimestamp()
+        headers = isQuery ? headers : { ...headers, ...result }
     }
 
-    // Populate & validate timestamp header
-    let timestamp = (options || {}).timestamp || getHeader(headers, 'x-amz-date')[1]
-    if (timestamp) {
-        if (!/\d{8}T\d{6}Z/.test(timestamp)) {
-            throw new Error(`Invalid timestamp provided: ${timestamp}`)
-        }
+    // Derive signing key
+    const { signing, credential } = getSigning(timestamp, credentials, options)
+
+    // Set other parameters if needed
+    const cheaders = getCanonicalHeaders(headers)
+    if (isQuery) {
+        result['X-Amz-Algorithm'] = MAIN_ALGORITHM
+        result['X-Amz-Credential'] = credential
+        result['X-Amz-SignedHeaders'] = cheaders[1]
+        query = new URLSearchParams(query)
+        Object.keys(result).forEach(k => query.append(k, result[k]))
+    }
+
+    // Construct canonical request, digest, and sign
+    const creq = getCanonical(method, pathname, query, cheaders, body, options)
+    const digest = createHash('sha256').update(creq).digest('hex')
+    const signature = signDigest(MAIN_ALGORITHM, digest, timestamp, signing)
+
+    // Return parameters
+    if (isQuery) {
+        result['X-Amz-Signature'] = signature.toString('hex')
     } else {
-        timestamp = newHeaders['x-amz-date'] = formatTimestamp()
+        result['authorization'] = buildAuthorization({ signature, credential,
+            algorithm: MAIN_ALGORITHM, signedHeaders: cheaders[1] })
     }
-
-    // Obtain body hash
-    let bodyHash = EMPTY_HASH
-    if (body) {
-        bodyHash = (typeof (body as any).hash === 'string') ? (body as any).hash
-            : createHash('sha256').update(body as any).digest('hex')
-    }
-
-    // Build canonical string, get digest, calculate signature
-    const { canonical, signedHeaders } = getCanonical(
-        method, parsedUrl.pathname, parsedUrl.searchParams,
-        {...headers, ...newHeaders}, bodyHash, options)
-    const digest = createHash('sha256').update(canonical).digest('hex')
-    const { signature, credential } =
-        sign(credentials, MAIN_ALGORITHM, digest, timestamp, options)
-
-    // Generate Authorization header
-    newHeaders['authorization'] = buildAuthorization(
-        { algorithm: MAIN_ALGORITHM, signature, signedHeaders, credential })
-    return newHeaders
+    return result
 }
 
 /**
- * Convenience method that calls {{signRequest}} and replaces
- * `request.headers` with the merged headers.
+ * High-level function that signs an HTTP request using
+ * `AWS-HMAC-SHA256` with either headers (`Authorization`) or query
+ * parameters (presigned URL) depending on the `query` option.
+ * 
+ * It populates some parameters (see below), calls {{signRequestRaw}} and
+ * (if `set` is enabled) adds the parameters to `headers` or `searchParams`.
  *
- * If you don't supply region and service name, they will
- * be extracted from `request.hostname` or `request.host`.
- *
- * Or, if you don't provide a hostname, it will be populated from
- * the `serviceName` (and `regionName` if present).
+ *  - If `serviceName` or `regionName` are not present, they are detected
+ *    from `url.host`. If `url.host` is not present, it is populated from
+ *    `serviceName` / `regionName` (independently of the `set` option).
+ * 
+ *  - If the `Host` header is not present, this method behaves as if
+ *    it was set to `url.host`.
+ * 
+ *  - The timestamp is taken from the `X-Amz-Date` header (or query parameter,
+ *    if query signing is requested). If not present, it's generated with
+ *    {{formatTimestamp}} and returned/set along with the other authorization
+ *    parameters.
+ * 
+ * Keep in mind headers are matched case insensitively (and returned in
+ * lowercase), but query parameters aren't.
+ * 
+ * For query signing: If `set` is enabled and `url` is a string, it will
+ * be replaced with a new string; otherwise `url.searchParams` will be mutated.
  *
  * @param credentials Credentials to sign the request with
- * @param request Request to sign
- * @param body Request body
+ * @param request HTTP request to sign, see {{SignedRequest}}
  * @param options Other options
- * @returns The passed request object
+ * @returns Authorization headers / query parameters
  */
-export function autoSignRequest(
+export function signRequest(
     credentials: RelaxedCredentials,
-    request: RequestOptions,
-    body?: string | Buffer | { hash: string },
+    request: SignedRequest,
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ) {
-    const path = request.path || '/'
-    let pathSep = path.indexOf('?')
-    pathSep = (pathSep === -1) ? path.length : pathSep
-    const pathname = path.substr(0, pathSep)
-    const searchParams = path.substr(pathSep)
+    let { url, headers, method, body } = request
+    url = typeof url === 'string' ? new URL(url) : url
 
-    let host = request.hostname || request.host
-    if (!host) {
+    // Detect url.host or serviceName / regionName
+    if (!url.host) {
         if (!credentials.serviceName) {
-            throw new Error('Neither hostname nor serviceName passed')
+            throw new Error('Neither url.host nor serviceName was provided')
         }
-        host = request.hostname = formatHost(credentials.serviceName,
-            credentials.regionName, request.port)
-        credentials.regionName = credentials.regionName || DEFAULT_REGION
-    } else if (!credentials.regionName || !credentials.serviceName) {
-        credentials = {...parseHost(host), ...credentials}
+        url.host = formatHost(credentials.serviceName, credentials.regionName)
+        credentials = { regionName: DEFAULT_REGION, ...credentials }
+    } else if (!credentials.serviceName || !credentials.regionName) {
+        credentials = { ...parseHost(url.host), ...credentials }
     }
 
-    const newHeaders = signRequest(credentials as Credentials,
-        request.method || 'GET', { host, pathname, searchParams },
-        request.headers || {}, body, options)
-    request.headers = {...request.headers, ...newHeaders}
-    return request
+    // Populate host header if necessary
+    if (!getHeader(headers, 'host')[1]) {
+        headers = { ...headers, host: url.host }
+    }
+
+    // Sign the request
+    const query = url.searchParams || new URLSearchParams()
+    const result = signRequestRaw(credentials as Credentials, method || 'GET',
+        url.pathname || '/', query, headers || {}, body, options)
+
+    // Set the parameters if required
+    if (options && options.set) {
+        if (options && options.query) {
+            if (!url.searchParams) {
+                url.searchParams = query
+            }
+            Object.keys(result).forEach(k => query.append(k, result[k]))
+        } else {
+            const rh = request.headers = request.headers || {}
+            Object.keys(result).forEach(k => { rh[k] = result[k] })
+        }
+    }
+    if (typeof request.url === 'string') {
+        request.url = (url as URL).toString()
+    }
+
+    return result
 }

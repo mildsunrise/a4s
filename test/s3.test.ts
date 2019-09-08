@@ -1,9 +1,8 @@
 import { promisify } from 'util'
 import * as stream from 'stream'
-import { RequestOptions } from 'http'
 import { getSigningData } from '../src/core'
-import { signPolicy } from '../src/s3'
-import { createPayloadSigner, signChunk, CHUNK_MIN } from '../src/s3_chunked'
+import { signS3Policy, SignedS3Request } from '../src/s3'
+import { createPayloadSigner, signS3Chunk, CHUNK_MIN } from '../src/s3_chunked'
 const finished = promisify(stream.finished)
 
 describe('S3 signing', () => {
@@ -23,7 +22,7 @@ describe('S3 signing', () => {
             const signing = getSigningData(timestamp, credentials.secretKey, 'us-east-1', 's3')
             const lastSignature = '4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9'
             const hash = 'bf718b6f653bebc184e1479f1935b8da974d701b893afcf49e701f3e2f9f9c5a'
-            expect(signChunk(lastSignature, signing, timestamp, { hash }))
+            expect(signS3Chunk(lastSignature, signing, timestamp, { hash }))
                 .toBe('ad80c730a21e5b8d04586a2213dd63b9a0e99e0e2307b0ade35a65485a288648')
         })
 
@@ -31,20 +30,18 @@ describe('S3 signing', () => {
             const payload = Buffer.alloc(65 * 1024, 'a')
             const chunkSize = 64 * 1024
             
-            const request: RequestOptions = {
+            const request: SignedS3Request = {
                 method: 'PUT',
-                path: '/examplebucket/chunkObject.txt',
-                host: 's3.amazonaws.com',
+                url: 'https://s3.amazonaws.com/examplebucket/chunkObject.txt',
                 headers: {
                     'x-amz-date': '20130524T000000Z',
                     'x-amz-storage-class': 'REDUCED_REDUNDANCY',
                 }
             }
-            const signer = createPayloadSigner(
-                credentials, request, payload.length, chunkSize)
+            const { signer } = createPayloadSigner(
+                credentials, request, payload.length, chunkSize, { set: true })
             
             expect(request.headers).toStrictEqual({
-                'host': 's3.amazonaws.com',
                 'x-amz-date': '20130524T000000Z',
                 'x-amz-storage-class': 'REDUCED_REDUNDANCY',
                 'authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20130524/us-east-1/s3/aws4_request, SignedHeaders=content-encoding;content-length;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-storage-class, Signature=4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9',
@@ -75,29 +72,28 @@ describe('S3 signing', () => {
         })
         
         it('edge cases', async () => {
-            const request: RequestOptions = {
+            const request: SignedS3Request = {
                 method: 'PUT',
-                path: '/examplebucket/chunkObject.txt',
-                host: 's3.amazonaws.com',
+                url: 'https://s3.amazonaws.com/examplebucket/chunkObject.txt',
                 headers: {
                     'x-amz-date': '20130524T000000Z',
                     'x-amz-storage-class': 'REDUCED_REDUNDANCY',
                 }
             }
             expect(() => createPayloadSigner(credentials,
-                { ...request }, 0, CHUNK_MIN - 1)).toThrow()
+                request, 0, CHUNK_MIN - 1)).toThrow()
             expect(() => createPayloadSigner(credentials,
-                { ...request }, -1, CHUNK_MIN)).toThrow()
+                request, -1, CHUNK_MIN)).toThrow()
             expect(() => createPayloadSigner(credentials,
-                { ...request }, 0, CHUNK_MIN + 0.1)).toThrow()
+                request, 0, CHUNK_MIN + 0.1)).toThrow()
             expect(() => createPayloadSigner(credentials,
-                { ...request }, 0.1, CHUNK_MIN)).toThrow()
+                request, 0.1, CHUNK_MIN)).toThrow()
             expect(() => createPayloadSigner(credentials,
-                { ...request }, 0, CHUNK_MIN)).not.toThrow()
+                request, 0, CHUNK_MIN)).not.toThrow()
             
             function test(payload: Buffer) {
-                const signer = createPayloadSigner(credentials,
-                    { ...request }, payload.length, 8 * 1024)
+                const { signer } = createPayloadSigner(credentials,
+                    request, payload.length, 8 * 1024)
                 const chunks: Buffer[] = []
                 const done = finished(signer)
                 signer.on('data', data => chunks.push(data)).end(payload)
@@ -135,7 +131,7 @@ describe('S3 signing', () => {
 
     describe('POST form based', () => {
         it('should sign a policy correctly', () => {
-            const params = signPolicy(
+            const params = signS3Policy(
                 { ...credentials, regionName: 'eu-west-2' },
                 {
                     expires: new Date(1567327687881).toISOString(),
@@ -161,7 +157,7 @@ describe('S3 signing', () => {
         })
 
         it('should obey if we force service / region', () => {
-            const params = signPolicy(
+            const params = signS3Policy(
                 { ...credentials, serviceName: 'test', regionName: 'reg' },
                 {
                     expires: new Date(1567327687881).toISOString(),

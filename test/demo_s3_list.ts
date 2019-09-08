@@ -4,7 +4,7 @@
 
 import { URL } from 'url'
 import { get } from 'https'
-import { autoSignRequestHeader } from '../src/s3'
+import { signS3Request, SignedS3Request } from '../src/s3'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
@@ -16,13 +16,12 @@ if (!accessKey || !secretKey || args.length !== 1) {
 }
 
 const url = new URL(args[0])
-const request = autoSignRequestHeader({ accessKey, secretKey }, {
-    host: url.host,
-    path: `${url.pathname}?list-type=2`,
-})
+url.search = 'list-type=2'
+const request: SignedS3Request = { url }
+signS3Request({ accessKey, secretKey }, request, { set: true })
 
 console.log('Sending request:', request)
-get(request, response => {
+get(request.url as URL, request, response => {
     console.log(`Got ${response.statusCode} response:`)
     response.pipe(process.stdout)
 })

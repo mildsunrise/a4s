@@ -22,13 +22,9 @@ const url = new URL(args[0])
 const fileSize = statSync(args[1]).size
 const input = createReadStream(args[1])
 
-const request = {
-    method: 'PUT',
-    host: url.host,
-    path: url.pathname,
-}
-const signer = createPayloadSigner(
-    { accessKey, secretKey }, request, fileSize, 64 * 1024)
+const request = { method: 'PUT', url }
+const { signer } = createPayloadSigner(
+    { accessKey, secretKey }, request, fileSize, 64 * 1024, { set: true })
 
 console.log('Sending request:', request)
 const output = https.request(request, response => {

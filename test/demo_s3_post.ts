@@ -5,7 +5,7 @@
 
 import { parse } from 'url'
 import { createServer, IncomingMessage, ServerResponse } from 'http'
-import { signPolicy } from '../src/s3'
+import { signS3Policy } from '../src/s3'
 import { randomBytes } from 'crypto'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
@@ -49,7 +49,7 @@ function renderUploadForm(key: string, req: IncomingMessage, res: ServerResponse
             [ 'content-length-range', 0, 2*1024*1024 ],
         ]
     }
-    params = { ...params, ...signPolicy(credentials, policy) }
+    params = { ...params, ...signS3Policy(credentials, policy) }
 
     // Build the form's HTML
     const paramsHtml = Object.keys(params).map(k =>

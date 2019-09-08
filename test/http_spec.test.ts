@@ -8,15 +8,15 @@
  *    signing S3 through query
  *
  */
-import { getCanonical, signRequest, autoSignRequest, getCanonicalHeaders, getCanonicalQuery, getCanonicalURI } from '../src/http'
+import { signRequest, getCanonicalHeaders, getCanonicalQuery, getCanonicalURI } from '../src/http'
 import { RequestOptions } from 'http'
 import { formatTimestamp, formatDate } from '../src/core';
 
 const buildRequest = (): RequestOptions & {
-    body: string, endpoint: any, region: string, headers: {[key: string]: string}
+    body: string, endpoint: any, region: string, headers: {[key: string]: string}, url: any
 } => ({
     method: 'POST',
-    path: '/',
+    url: { pathname: '/' },
     headers: {
         //'User-Agent': 'aws-sdk-nodejs/2.519.0 linux/v12.6.0',
         //'Content-Type': 'application/x-amz-json-1.0',
@@ -64,13 +64,13 @@ describe('SDK spec, HTTP signing', () => {
         it('can accept an options object', function() {
             let options: object = { no: true }
             const request = buildRequest()
-            autoSignRequest(fullCreds, request, request.body, options)
-            expect(request.headers.authorization).toBe(authorization)
+            const result = signRequest(fullCreds, request, options)
+            expect(result.authorization).toBe(authorization)
         })
         it('should generate proper signature', function() {
             const request = buildRequest()
-            autoSignRequest(fullCreds, request, request.body)
-            expect(request.headers.authorization).toBe(authorization)
+            const result = signRequest(fullCreds, request)
+            expect(result.authorization).toBe(authorization)
         })
         // it('should not compute SHA 256 checksum more than once')
         it('should generate timestamp correctly', () => {
