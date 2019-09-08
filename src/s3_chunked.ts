@@ -12,7 +12,7 @@ import { Transform } from 'stream'
 import { formatTimestamp, getSigningData, signDigest, RelaxedCredentials, SignOptions, SigningData } from './core'
 import { SignHTTPOptions, CanonicalOptions, parseAuthorization } from './http'
 import { signS3Request, SignedS3Request } from './s3'
-import { getHeader } from './util/headers'
+import { getHeader } from './util/request'
 
 /** Special value for payload digest, which indicates payload streaming encoding */
 export const PAYLOAD_STREAMING = 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD'

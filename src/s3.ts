@@ -13,7 +13,7 @@ import { formatTimestamp, getSigning, signString, MAIN_ALGORITHM,
     RelaxedCredentials, GetSigningData, SignOptions } from './core'
 import { hashBody, signRequest, SignHTTPOptions, CanonicalOptions, SignedRequest } from './http'
 import { DEFAULT_REGION } from './util/endpoint'
-import { getHeader } from './util/headers'
+import { getHeader } from './util/request'
 
 export interface PolicySignOptions {
     timestamp?: string | Date

@@ -16,7 +16,7 @@ import { OutgoingHttpHeaders } from 'http'
 
 import { formatTimestamp, getSigning, signDigest, MAIN_ALGORITHM, RelaxedCredentials, Credentials, SignOptions } from './core'
 import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
-import { getHeader } from './util/headers'
+import { getHeader } from './util/request'
 
 export interface CanonicalOptions {
     dontNormalize?: boolean

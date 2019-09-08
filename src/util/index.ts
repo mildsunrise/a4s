@@ -1,2 +1,3 @@
 import * as endpoint from './endpoint'
-export { endpoint }
+import * as request from './request'
+export { endpoint, request }

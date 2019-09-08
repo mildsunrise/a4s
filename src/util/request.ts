@@ -1,6 +1,10 @@
 /**
- * Utilities to normalize and work with headers.
+ * Utilities to normalize and work with requests and headers.
  */
+
+import { SignedRequest } from '../http'
+import { RequestOptions } from 'http'
+import { URL } from 'url';
 
 const normalizeValue = (value: string | string[] | number | undefined) =>
     value instanceof Array ? value.join(',') : value + ''
@@ -26,4 +30,15 @@ export function getHeader(
         }
     }
     return [ name, undefined ]
+}
+
+export function toRequestOptions(
+    request: SignedRequest
+): RequestOptions {
+    let { method, url, headers } = request
+    url = typeof url === 'string' ? new URL(url) : url
+    const { host, pathname, searchParams } = url
+    const query = searchParams && searchParams.toString()
+    const path = (pathname || '/') + (query ? '?' + query : '')
+    return { method, headers, host, path }
 }
