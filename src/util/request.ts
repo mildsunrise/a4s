@@ -32,13 +32,30 @@ export function getHeader(
     return [ name, undefined ]
 }
 
-export function toRequestOptions(
-    request: SignedRequest
-): RequestOptions {
+/**
+ * Generate HTTP request options from a {{SignedRequest}} object.
+ */
+export function toRequestOptions(request: SignedRequest): RequestOptions {
     let { method, url, headers } = request
     url = typeof url === 'string' ? new URL(url) : url
     const { host, pathname, searchParams } = url
     const query = searchParams && searchParams.toString()
     const path = (pathname || '/') + (query ? '?' + query : '')
     return { method, headers, host, path }
+}
+
+/**
+ * Gemerate a URL string from the `url` field of a {{SignedRequest}}.
+ */
+export function toURL(url: SignedRequest["url"]) {
+    if (typeof url === 'string') {
+        return url
+    }
+    if (url instanceof URL) {
+        return url.toString()
+    }
+    const origin = url.host ? `https://${url.host}` : ''
+    const query = url.searchParams && url.searchParams.toString()
+    const pathname = url.pathname ? encodeURI(url.pathname) : '/'
+    return origin + pathname + (query ? `?${query}` : '')
 }

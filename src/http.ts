@@ -374,13 +374,13 @@ export function signRequest(
                 url.searchParams = query
             }
             Object.keys(result).forEach(k => query.append(k, result[k]))
+            if (typeof request.url === 'string') {
+                request.url = (url as URL).toString()
+            }
         } else {
             const rh = request.headers = request.headers || {}
             Object.keys(result).forEach(k => { rh[k] = result[k] })
         }
-    }
-    if (typeof request.url === 'string') {
-        request.url = (url as URL).toString()
     }
 
     return result

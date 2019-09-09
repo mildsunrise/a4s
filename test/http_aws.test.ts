@@ -7,11 +7,12 @@
  */
 
 import { promisify } from 'util'
+import { URLSearchParams } from 'url'
 import * as fs from 'fs'
 import { join, basename } from 'path'
 const readFile = promisify(fs.readFile)
 
-import { signRequest, getCanonical, getCanonicalHeaders } from '../src/http'
+import { signRequest, getCanonical, getCanonicalHeaders, signRequestRaw } from '../src/http'
 
 describe('AWS test suite', () => {
     const CREDENTIALS = {
@@ -37,10 +38,22 @@ describe('AWS test suite', () => {
                 getCanonicalHeaders(input.headers), input.body)
             expect(canonical).toBe(expCanonical)
 
+            const headers2 = { ...input.headers }
+            const query2 = new URLSearchParams(query)
+            const result1 = signRequestRaw({ ...CREDENTIALS, regionName: 'us-east-1' },
+                input.method, pathname, query2, headers2, input.body)
+            expect(headers2).toStrictEqual(input.headers)
+            expect(query2.toString()).toBe(new URLSearchParams(query).toString())
+            expect(result1)
+            expect(result1['authorization']).toBe(expAuthorization)
+
             const host = input.headers['Host'][0]
             const request = { ...input, url: `https://${host}${input.path}` }
-            const result = signRequest(CREDENTIALS, request)
-            expect(result['authorization']).toBe(expAuthorization)
+            const request2 = JSON.parse(JSON.stringify(request))
+            expect(request2).toStrictEqual(request)
+            const result2 = signRequest(CREDENTIALS, request2)
+            expect(request2).toStrictEqual(request)
+            expect(result2).toStrictEqual(result1)
         })
     }
 
@@ -54,7 +67,7 @@ describe('AWS test suite', () => {
         dirs.forEach(x => collectTests(tests, root, join(dir, x.name)))
     }        
 
-    function parseRequest(input: string) {
+    function parseRequest(input: string): { method: string, path: string, headers: {[key: string]: string[]}, body?: string } {
         const re = /^([A-Z]+) ([^\n]+) HTTP\/1\.1((\n[^:\n]+:[^\n]*(\n[^\n:]+)*)*)(\n\n(.*))?$/s
         const match = re.exec(input)
         if (!match) {
@@ -74,6 +87,7 @@ describe('AWS test suite', () => {
                 buffer = buffer.substring(match[0].length)
             }
         }
-        return { method, path, headers, body }
+        let result = { method, path, headers }
+        return body ? { ...result, body } : result
     }
 })

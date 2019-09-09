@@ -27,7 +27,7 @@ const { signer } = createPayloadSigner(
     { accessKey, secretKey }, request, fileSize, 64 * 1024, { set: true })
 
 console.log('Sending request:', request)
-const output = https.request(request, response => {
+const output = https.request(request.url, request, response => {
     console.log(`Got ${response.statusCode} response:`)
     response.pipe(process.stdout)
 })

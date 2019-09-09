@@ -1,4 +1,4 @@
-import { formatTimestamp, formatDate, getSigningData, signDigest } from "../src/core";
+import { formatTimestamp, formatDate, getSigningData, signDigest } from '../src/core'
 
 describe('Core signing', () => {
 

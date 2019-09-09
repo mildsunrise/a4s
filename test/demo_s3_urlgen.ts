@@ -2,9 +2,9 @@
  * Demo CLI tool that generates a presigned GET URL for a bucket object.
  */
 
-import * as url from 'url'
 import { signS3Request } from '../src/s3'
 import { formatHost } from '../src/util/endpoint'
+import { toURL } from '../src/util/request'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
@@ -20,8 +20,7 @@ const [ bucket, regionName, key ] = args
 const credentials = { accessKey, secretKey, regionName, serviceName: 's3' }
 const host = `${bucket}.${formatHost('s3', regionName)}`
 const pathname = encodeURI(key[0] === '/' ? key : `/${key}`)
-const query = signS3Request(
-    credentials, { url: { host, pathname } }, { query: true })
+const url = { host, pathname }
+signS3Request(credentials, { url }, { query: true, set: true })
 
-const link = url.format({ protocol: 'https', host, pathname, query })
-console.log('Presigned URL:', link)
+console.log('Presigned URL:', toURL(url))

@@ -1,6 +1,9 @@
 /**
  * Starts up a demo webserver that lets visitors upload files to
  * a private S3 bucket, using {{signPolicy}}.
+ * 
+ * The files are uploaded directly from the browser; this
+ * program doesn't communicate with AWS.
  */
 
 import { parse } from 'url'
@@ -30,7 +33,8 @@ createServer((req, res) => {
     } else {
         res.end('Not found')
     }
-}).listen(process.env.PORT || 8080)
+}).listen(process.env.PORT || 8080,
+    () => console.log('Server listening at http://localhost:8080'))
 
 
 function renderUploadForm(key: string, req: IncomingMessage, res: ServerResponse) {

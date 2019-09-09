@@ -126,7 +126,8 @@ export function signS3Request(
     }
     const result = { ...extra, ...signRequest(
         credentials, request, { ...S3_OPTIONS, ...options }) }
-    if (typeof originalRequest.url === 'string') {
+    if (options && options.set && options.query &&
+        typeof originalRequest.url === 'string') {
         originalRequest.url = (url as URL).toString()
     }
     return result
