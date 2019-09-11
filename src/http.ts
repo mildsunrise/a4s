@@ -201,16 +201,16 @@ export function buildAuthorization(data: {
 
 /**
  * Method to parse an Authorization header. The Authorization
- * should follow the syntax of [[buildAuthorization]] and
- * must NOT contain additional fields (but may have them in
+ * should follow the syntax of [[buildAuthorization]] and must
+ * have at least Signature, SignedHeaders and Credential (in
  * any order). Note that no validation is done on any of the
- * returned values other than signature.
+ * returned values other than signature. If there are repeated
+ * fields, the last one wins.
  * @returns Header values (see [[buildAuthorization]] argument)
  * @throws If there's a syntax error
  */
 export function parseAuthorization(header: string) {
-    // FIXME: verify order, whitespace between =, and signature case doesn't matter
-    const split1 = (x: string, token: string) => {
+    const split1 = (x: string, token: string): [string, string] => {
         const idx = x.indexOf(token)
         if (idx === -1) {
             throw new Error('Invalid authorization header structure')
@@ -218,17 +218,13 @@ export function parseAuthorization(header: string) {
         return [ x.substring(0, idx), x.substring(idx + 1) ]
     }
 
-    const parts = split1(header, ' ')
-    const rawFields = parts[1].split(',')
-    if (rawFields.length !== 3) {
-        throw new Error('Invalid authorization header (missing / extra fields)')
-    }
-    const fields = new Map(rawFields.map(x =>
-        split1(x, '=').map(v => v.trim()) as [string, string]))
+    const parts = split1(header.trimLeft(), ' ')
+    const rawFields = parts[1].split(',').map(x => x.trim())
+    const fields = new Map(rawFields.map(x => split1(x, '=')))
     if (!fields.has('Signature') || !fields.has('Credential') || !fields.has('SignedHeaders')) {
         throw new Error('Invalid authorization header (missing / extra fields)')
     }
-    if (!/^([0-9a-z]{2})+$/i.test(fields.get('Signature')!)) {
+    if (!/^([0-9a-f]{2})+$/.test(fields.get('Signature')!)) {
         throw new Error('Invalid signature format')
     }
     return {

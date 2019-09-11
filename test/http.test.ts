@@ -1,5 +1,5 @@
 import { URLSearchParams } from 'url'
-import { signRequest, getCanonicalURI, SignedRequest } from '../src/http'
+import { signRequest, getCanonicalURI, SignedRequest, getCanonicalHeaders, parseAuthorization } from '../src/http'
 
 const oDate = Date
 const date = jest.spyOn(global, 'Date').mockImplementation(((s: any) => {
@@ -37,6 +37,75 @@ describe('HTTP signing', () => {
             expect(getCanonicalURI('/test\n')).toBe('/test%250A'))
         it('encodes in UTF-8', () =>
             expect(getCanonicalURI('/test😊')).toBe('/test%25F0%259F%2598%258A'))
+    })
+
+    describe('canonical headers', () => {
+        it('throws if there are duplicate header keys', () => {
+            expect(() => getCanonicalHeaders({
+                'a': 'foo',
+                'b': 'bar',
+                'test': 34,
+                'tEst': '12',
+            })).toThrow()
+        })
+    })
+
+    describe('Authorization parsing', () => {
+        it('basic test', () => {
+            expect(parseAuthorization('ALGORITHM-TEST2 Signature=41, SignedHeaders=foo, Credential=bar'))
+                .toStrictEqual({
+                    algorithm: 'ALGORITHM-TEST2',
+                    signature: Buffer.from('A'),
+                    credential: 'bar',
+                    signedHeaders: 'foo'
+                })
+        })
+
+        it('ignores whitespace', () => {
+            expect(parseAuthorization('  ALGORITHM    Signature=41 ,SignedHeaders= hey you  , Credential=  '))
+                .toStrictEqual({
+                    algorithm: 'ALGORITHM',
+                    signedHeaders: ' hey you',
+                    signature: Buffer.from('A'),
+                    credential: ''
+                })
+        })
+
+        it("throws if there's invalid syntax", () => {
+            expect(() => parseAuthorization('ALGORITHM')).toThrow()
+            expect(() => parseAuthorization('ALGORITHM ')).toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=40, SignedHeaders=a, Credential')).toThrow()
+        })
+
+        it('for duplicate fields, last one wins', () => {
+            expect(parseAuthorization('ALGORITHM Signature=41, SignedHeaders=m=a, Credential=a, Credential=b, Credential=c, credential=d'))
+                .toStrictEqual({
+                    algorithm: 'ALGORITHM',
+                    signedHeaders: 'm=a',
+                    signature: Buffer.from('A'),
+                    credential: 'c',
+                })
+        })
+
+        it('throws if there are missing fields', () => {
+            expect(() => parseAuthorization('ALGORITHM Signature=40, SignedHeaders=m=a')).toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=40, Credential=b')).toThrow()
+
+            expect(() => parseAuthorization('ALGORITHM Signature=40, SignedHeaders=m=a, Credential=b')).not.toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=40, SignedHeaders=m=a, Credential=b, credential=2')).not.toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=40, SignedHeaders=m=a, credential=2')).toThrow()
+        })
+
+        it("throws if Signature isn't valid lowercase hexdump", () => {
+            expect(() => parseAuthorization('ALGORITHM Signature=40, SignedHeaders=a, Credential=b')).not.toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=4a, SignedHeaders=a, Credential=b')).not.toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=4A, SignedHeaders=a, Credential=b')).toThrow()
+
+            expect(() => parseAuthorization('ALGORITHM Signature=405, SignedHeaders=a, Credential=b')).toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=4050, SignedHeaders=a, Credential=b')).not.toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=40h0, SignedHeaders=a, Credential=b')).toThrow()
+            expect(() => parseAuthorization('ALGORITHM Signature=40 50, SignedHeaders=a, Credential=b')).toThrow()
+        })
     })
 
     describe('signing', () => {
@@ -98,6 +167,32 @@ describe('HTTP signing', () => {
                 method: 'PUT',
                 url: 'https://ec2.amazonaws.com/?X-Amz-Date=20190830T164820Z&Action=DescribeRegions&Version=2013-10-15&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=access_test%2F20190830%2Fus-east-1%2Fec2%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=d935014135f10370b9612a0db8877ee51809544c08acd74a22647be1764cc345'
             })
+        })
+
+        it('populates url.searchParams if needed', () => {
+            const sorted = (x: any) => {
+                x.sort()
+                return x
+            }
+            const request = {
+                method: 'PUT',
+                url: {},
+            }
+            const query = signRequest(
+                { ...credentials, serviceName: 'ec2', regionName: 'us-east-1' },
+                request,
+                { query: true, set: true }
+            )
+            expect(query).toStrictEqual({
+                'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+                'X-Amz-Credential': 'access_test/20190831/us-east-1/ec2/aws4_request',
+                'X-Amz-SignedHeaders': 'host',
+                'X-Amz-Date': '20190831T201224Z',
+                'X-Amz-Signature': 'bfd068f0e69d31f06a04b25173b6d3ff53325c8ae6f830779adc71de27e54bd8'
+            })
+            expect((request.url as any).host).toBe('ec2.us-east-1.amazonaws.com')
+            expect((request.url as any).pathname).toBe(undefined)
+            expect(sorted((request.url as any).searchParams).toString()).toBe(sorted(new URLSearchParams(query)).toString())
         })
 
         it('auto-signs the request inferring service/region', () => {
@@ -218,6 +313,15 @@ describe('HTTP signing', () => {
                     authorization: 'AWS4-HMAC-SHA256 Credential=access_test/20190831/us-east-1/ec2/aws4_request, SignedHeaders=host;x-amz-date, Signature=e4cd083abe3ddd69c1548ec1466784ff59d8dfe4e9004c6d2fb2bbc197d6773b'
                 }
             })
+        })
+
+        it('throws if neither url.host nor serviceName is present', () => {
+            expect(() => {
+                signRequest(
+                    credentials,
+                    { url: { pathname: '/a', searchParams: new URLSearchParams() } }
+                )
+            }).toThrow()
         })
     })
 

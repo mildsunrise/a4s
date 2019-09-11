@@ -10,7 +10,7 @@ const date = jest.spyOn(global, 'Date').mockImplementation(((s: any) => {
     return s ? new oDate(s) : new oDate(1567327663238)
 }) as any)
 
-describe('Authorization-based Chunked Upload', () => {
+describe('S3 Authorization-based Chunked Upload', () => {
     const credentials = {
         accessKey: 'AKIAIOSFODNN7EXAMPLE',
         secretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',

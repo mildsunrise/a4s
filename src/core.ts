@@ -67,6 +67,7 @@ getSigningData.makeSimpleCache = (): GetSigningData => {
     let key: string
     let value: SigningData
     return function _cached_getSigningData(a, b, c, d) {
+        a = a.substring(0, 8)
         const nkey = [a,b,c,d].join('/')
         if (key !== nkey) {
             [ key, value ] = [ nkey, getSigningData(a,b,c,d) ]
