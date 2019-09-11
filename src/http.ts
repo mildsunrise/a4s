@@ -100,7 +100,7 @@ export function getCanonicalQuery(query: URLSearchParams | string | {[key: strin
     // .sort() uses UTF-16 code units instead of codepoints... close enough
     for (const key of Array.from(new Set(pquery.keys())).sort()) {
         if (!key) {
-            return // FIXME: verify that services need empty keys stripped
+            continue // FIXME: verify that services need empty keys stripped
         }
         const pkey = escape(key) + '='
         for (const value of pquery.getAll(key).sort()) {

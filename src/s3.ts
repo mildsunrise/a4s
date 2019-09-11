@@ -186,3 +186,6 @@ export function signS3Policy(
 
     return { ...fields, 'policy': encodedPolicy, 'x-amz-signature': signature }
 }
+
+import * as chunked from './s3_chunked'
+export { chunked }

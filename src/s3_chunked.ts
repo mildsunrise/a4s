@@ -76,12 +76,7 @@ export function signS3Chunk(
     timestamp: string,
     chunk?: Buffer | { hash: string },
 ) {
-    let hash = EMPTY_HASH
-    if (chunk) {
-        hash = Buffer.isBuffer(chunk) ?
-            createHash('sha256').update(chunk).digest('hex') : chunk.hash
-    }
-    const digest = [lastSignature, EMPTY_HASH, hash].join('\n')
+    const digest = [lastSignature, EMPTY_HASH, hashBody(chunk)].join('\n')
     return signDigest(ALGORITHM_STREAMING, digest, timestamp, signing).toString('hex')
 }
 
@@ -201,7 +196,7 @@ export function signS3ChunkedRequest(
  * @returns Object containing authorization parameters,
  * and the signing transform stream.
  */
-export function createPayloadSigner(
+export function createS3PayloadSigner(
     credentials: RelaxedCredentials,
     request: SignedS3Request,
     bodyLength: number,

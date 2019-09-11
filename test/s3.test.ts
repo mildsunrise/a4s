@@ -2,7 +2,7 @@ import { promisify } from 'util'
 import * as stream from 'stream'
 import { getSigningData } from '../src/core'
 import { signS3Policy, SignedS3Request, signS3Request } from '../src/s3'
-import { createPayloadSigner, signS3Chunk, CHUNK_MIN } from '../src/s3_chunked'
+import { createS3PayloadSigner, signS3Chunk, CHUNK_MIN } from '../src/s3_chunked'
 const finished = promisify(stream.finished)
 
 const oDate = Date
@@ -91,7 +91,7 @@ describe('S3 signing', () => {
                     'x-amz-storage-class': 'REDUCED_REDUNDANCY',
                 }
             }
-            const { signer } = createPayloadSigner(
+            const { signer } = createS3PayloadSigner(
                 credentials, request, payload.length, chunkSize, { set: true })
             
             expect(request.headers).toStrictEqual({
@@ -134,24 +134,24 @@ describe('S3 signing', () => {
                 }
             })
             const request = requestbuilder(), request2 = requestbuilder()
-            expect(() => createPayloadSigner(credentials,
+            expect(() => createS3PayloadSigner(credentials,
                 request, 0, CHUNK_MIN - 1)).toThrow()
             expect(request).toStrictEqual(request2)
-            expect(() => createPayloadSigner(credentials,
+            expect(() => createS3PayloadSigner(credentials,
                 request, -1, CHUNK_MIN)).toThrow()
             expect(request).toStrictEqual(request2)
-            expect(() => createPayloadSigner(credentials,
+            expect(() => createS3PayloadSigner(credentials,
                 request, 0, CHUNK_MIN + 0.1)).toThrow()
             expect(request).toStrictEqual(request2)
-            expect(() => createPayloadSigner(credentials,
+            expect(() => createS3PayloadSigner(credentials,
                 request, 0.1, CHUNK_MIN)).toThrow()
             expect(request).toStrictEqual(request2)
-            expect(() => createPayloadSigner(credentials,
+            expect(() => createS3PayloadSigner(credentials,
                 request, 0, CHUNK_MIN)).not.toThrow()
             expect(request).toStrictEqual(request2)
             
             function test(payload: Buffer) {
-                const { signer } = createPayloadSigner(credentials,
+                const { signer } = createS3PayloadSigner(credentials,
                     request, payload.length, 8 * 1024)
                 expect(request).toStrictEqual(request2)
                 const chunks: Buffer[] = []
