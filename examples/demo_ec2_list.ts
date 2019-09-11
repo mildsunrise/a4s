@@ -20,7 +20,8 @@ const credentials = { accessKey, secretKey, serviceName: 'ec2', regionName: args
 const request = {
     url: {
         searchParams: new URLSearchParams({
-            Action: 'DescribeInstances',
+            Action: 'DescribeInstanceStatus',
+            IncludeAllInstances: 'true',
             Version: '2016-11-15',
         }),
     },
