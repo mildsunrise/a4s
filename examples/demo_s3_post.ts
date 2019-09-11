@@ -1,6 +1,6 @@
 /**
  * Starts up a demo webserver that lets visitors upload files to
- * a private S3 bucket, using {{signPolicy}}.
+ * a private S3 bucket, using [[signPolicy]].
  * 
  * The files are uploaded directly from the browser; this
  * program doesn't communicate with AWS.

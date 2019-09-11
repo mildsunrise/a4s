@@ -1,11 +1,12 @@
 /**
  * This module contains signing logic that is specific for the S3
- * service, see {{signS3Request}}.
+ * service, see [[signS3Request]].
  *
  * Additionally there's POST form parameter authentication,
  * which is designed mainly to allow users to upload files
- * to S3 directly from their browser. See {{signS3Policy}}.
+ * to S3 directly from their browser. See [[signS3Policy]].
  */
+/** */
 
 import { URLSearchParams, URL } from 'url'
 
@@ -71,8 +72,8 @@ function patchHeaders(
  * `AWS-HMAC-SHA256` with either headers (`Authorization`) or query
  * parameters (presigned URL) depending on the `query` option.
  * 
- * This is a special version of {{signRequest}} that implements
- * some special quirks needed for S3:
+ * This is a special version of [[signRequest]] that implements
+ * some quirks needed for S3:
  * 
  *  - For header authorization, the `x-amz-content-sha256` is
  *    set to the body hash used to calculate the signature.
@@ -91,7 +92,7 @@ function patchHeaders(
  * set if requested.
  * 
  * @param credentials Credentials to sign the request with
- * @param request HTTP request to sign, see {{SignedS3Request}}
+ * @param request HTTP request to sign, see [[SignedS3Request]]
  * @param options Other options
  * @returns Authorization headers / query parameters
  */
@@ -99,7 +100,7 @@ export function signS3Request(
    credentials: RelaxedCredentials,
    request: SignedS3Request,
    options?: SignHTTPOptions & CanonicalOptions & SignOptions
-) {
+): {[key: string]: string} {
     let { url, body, unsigned, headers } = request
     url = typeof url === 'string' ? new URL(url) : url
     const originalRequest = request
@@ -144,18 +145,18 @@ export function signS3Request(
  * The policy shouldn't contain any authentication parameters (such
  * as `x-amz-date`); these will be added before signing it.
  *
- * For a working example of use, see `demo_s3_post`.
+ * > For a working example of use, see `demo_s3_post`.
+ *
+ * [create-form]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTForms.html
+ * [construct-policy]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
+ * [policy-auth]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-authentication-HTTPPOST.html
  *
  * @param credentials The IAM credentials to use for signing
  *                   (service name defaults to 's3', and the default region)
  * @param policy The policy object
  * @param timestamp You can optionally provide the timestamp for signing,
- *                  otherwise it will be generated using {{formatTimestamp}}
+ *                  otherwise it will be generated using [[formatTimestamp]]
  * @returns Key - value object containing the form parameters
- *
- * [create-form]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTForms.html
- * [construct-policy]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-HTTPPOSTConstructPolicy.html
- * [policy-auth]: https://docs.aws.amazon.com/AmazonS3/latest/API/sigv4-authentication-HTTPPOST.html
  */
 export function signS3Policy(
     credentials: RelaxedCredentials,

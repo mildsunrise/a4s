@@ -2,15 +2,16 @@
  * This module implements S3 Chunked Upload signing, which is a
  * special form of the usual `Authorization` signing for S3 requests
  * which signs the payload progressively, without requiring you to
- * calculate its digest first. See {{signS3ChunkedRequest}} and
- * {{createS3PayloadSigner}}.
+ * calculate its digest first. See [[signS3ChunkedRequest]] and
+ * [[createS3PayloadSigner]].
  */
+/** */
 
 import { createHash } from 'crypto'
 import { Transform } from 'stream'
 
 import { formatTimestamp, getSigningData, signDigest, RelaxedCredentials, SignOptions, SigningData } from './core'
-import { SignHTTPOptions, CanonicalOptions, parseAuthorization } from './http'
+import { SignHTTPOptions, CanonicalOptions, parseAuthorization, hashBody } from './http'
 import { signS3Request, SignedS3Request } from './s3'
 import { getHeader } from './util/request'
 
@@ -58,8 +59,8 @@ function patchHeaders(
 
 /**
  * Low-level function that calculates the signature for a chunk of
- * data. Most users should use {{createS3PayloadSigner}},
- * {{signS3ChunkedRequest}}.
+ * data. Most users should use [[createS3PayloadSigner]] or
+ * [[signS3ChunkedRequest]].
  * 
  * @param lastSignature Signature from previous chunk (or HTTP
  * request if this is the first chunk)
@@ -85,7 +86,7 @@ export function signS3Chunk(
 }
 
 /**
- * Special version of {{signS3Request}} implementing 'payload
+ * Special version of [[signS3Request]] implementing 'payload
  * streaming', which allows you to send a signed payload in chunks,
  * without having to calculate its digest first.
  * 
@@ -100,15 +101,15 @@ export function signS3Chunk(
  * adhere to this, or if the passed data doesn't match `bodyLength`. All
  * calls must pass data except for the final one.
  *
- * For a working example of use, see {{createS3PayloadSigner}} and
- * `demo_s3_upload`.
+ * > For a working example of use, see [[createS3PayloadSigner]] and
+ * > `demo_s3_upload`.
  * 
  * @param credentials Credentials to sign the request with
- * @param request HTTP request to sign, see {{SignedS3Request}}
+ * @param request HTTP request to sign, see [[SignedS3Request]]
  * @param bodyLength Length of the payload you want to send
  * @param chunkLength Length of each data chunk (must be at least CHUNK_MIN)
  * @param options Other options (`query` is ignored)
- * @returns Object containing authorization headers / query parameters,
+ * @returns Object containing authorization parameters,
  * and the chunk signer function.
  */
 export function signS3ChunkedRequest(
@@ -117,7 +118,7 @@ export function signS3ChunkedRequest(
     bodyLength: number,
     chunkLength: number,
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
-) {
+): { parameters: {[key: string]: string | number}, signer: ChunkSigner } {
     const originalRequest = request
     let { headers } = request
     const extra: {[key: string]: string | number} = {}
@@ -183,19 +184,21 @@ export function signS3ChunkedRequest(
 }
 
 /**
- * Like {{signS3ChunkedRequest}}, but instead of returning the chunk
- * signing function this returns a `Transform` stream that does the
+ * Like [[signS3ChunkedRequest]] but instead of returning the chunk
+ * signer function, this returns a `Transform` stream that does the
  * signing for you.
  *
  * Keep in mind an error will be thrown if the length of the
  * input data doesn't match the `bodyLength` you passed.
  *
+ * > For a working example of use, see `demo_s3_upload`.
+ * 
  * @param credentials Credentials to sign the request with
- * @param request HTTP request to sign, see {{SignedS3Request}}
+ * @param request HTTP request to sign, see [[SignedS3Request]]
  * @param bodyLength Length of the payload you want to send
  * @param chunkLength Length of each data chunk (must be at least CHUNK_MIN)
  * @param options Other options (`query` is ignored)
- * @returns Object containing authorization headers / query parameters,
+ * @returns Object containing authorization parameters,
  * and the signing transform stream.
  */
 export function createPayloadSigner(
@@ -204,7 +207,7 @@ export function createPayloadSigner(
     bodyLength: number,
     chunkLength: number,
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
-) {
+): { parameters: {[key: string]: string | number}, signer: Transform } {
     const { parameters, signer } = signS3ChunkedRequest(
         credentials, request, bodyLength, chunkLength, options)
 

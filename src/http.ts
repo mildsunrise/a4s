@@ -1,13 +1,12 @@
 /**
  * Code for signing HTTP requests, either through headers (`Authorization`)
- * or through query parameters (presigned URLs).
+ * or through query parameters (presigned URLs), see [[signRequest]].
  * 
- * This module calculates the canonical request (and its digest for signing),
- * and also builds the `Authorization` header (or the query parameters).
- * It also provides high-level methods that do the whole process.
- * 
- * See `signing` module for the actual signing logic.
+ * This module calculates the canonical request, signs its digest using the
+ * `core` module, and also builds the `Authorization` header (or the query
+ * parameters).
  */
+/** */
 
 import { URL, URLSearchParams } from 'url'
 import { unescape } from 'querystring'
@@ -63,8 +62,11 @@ function escape(str: string) {
     ).join('')
 }
 
-/** Get canonical URL string (low-level) */
-export function getCanonicalURI(pathName: string, options?: CanonicalOptions) {
+/**
+ * Get canonical URL string (low-level)
+ * @category Canonical request
+ */
+export function getCanonicalURI(pathName: string, options?: CanonicalOptions): string {
     let parts = pathName.split('/').map(unescape)
     if (!(options && options.dontNormalize)) {
         const newParts: string[] = []
@@ -87,8 +89,11 @@ export function getCanonicalURI(pathName: string, options?: CanonicalOptions) {
     return parts.join('/')
 }
 
-/** Get canonical query string (low-level) */
-export function getCanonicalQuery(query: URLSearchParams | string | {[key: string]: string}) {
+/**
+ * Get canonical query string (low-level)
+ * @category Canonical request
+ */
+export function getCanonicalQuery(query: URLSearchParams | string | {[key: string]: string}): string {
     const pquery = query instanceof URLSearchParams ?
         query : new URLSearchParams(query)
     const parts: string[] = []
@@ -109,6 +114,7 @@ export function getCanonicalQuery(query: URLSearchParams | string | {[key: strin
  * Get canonical headers and signed header strings (low-level)
  * @param headers Headers object
  * @returns Array with [ canonicalHeaders, signedHeaders ]
+ * @category Canonical request
  */
 export function getCanonicalHeaders(headers: OutgoingHttpHeaders): [string, string] {
     const trim = (x: string) => x.trim().replace(/\s+/g, ' ')
@@ -130,8 +136,11 @@ export function getCanonicalHeaders(headers: OutgoingHttpHeaders): [string, stri
 
 const EMPTY_HASH = createHash('sha256').digest('hex')
 
-/** Produce the body hash to include in canonical request (low-level) */
-export function hashBody(body: SignedRequest["body"], options?: CanonicalOptions) {
+/**
+ * Produce the body hash to include in canonical request (low-level)
+ * @category Canonical request
+ */
+export function hashBody(body: SignedRequest["body"], options?: CanonicalOptions): string {
     if (!body) {
         return EMPTY_HASH
     }
@@ -142,18 +151,16 @@ export function hashBody(body: SignedRequest["body"], options?: CanonicalOptions
 /**
  * Function to generate a canonical request string.
  * Most users won't need to call this directly.
- *
- * **Important:** It's mandatory for 'Host' (HTTP/1.1) or ':authority' (HTTP/2) to
- * be present in `headers`. 
  * 
  * @param method HTTP method
  * @param pathname URL pathname (i.e. without query string)
  * @param query Query parameters (if a string or object is provided, it will be parsed with `URLSearchParams`)
- * @param cheaders Result of {{getCanonicalHeaders}}
+ * @param cheaders Result of [[getCanonicalHeaders]]
  * @param body Request body to calculate hash of (alternatively you may
  *             calculate it yourself and pass it as `{ hash: '<hex>' }`)
  * @param options Other options
  * @returns The canonical request string
+ * @category Canonical request
  */
 export function getCanonical(
     method: string,
@@ -162,7 +169,7 @@ export function getCanonical(
     cheaders: [ string, string ],
     body: SignedRequest["body"],
     options?: CanonicalOptions
-) {
+): string {
     const [ canonicalHeaders, signedHeaders ] = cheaders
     return [
         method.toUpperCase().trim(),
@@ -183,7 +190,7 @@ export function buildAuthorization(data: {
     signature: Buffer
     credential: string
     signedHeaders: string
-}) {
+}): string {
     const fields = [
         `Credential=${data.credential}`,
         `SignedHeaders=${data.signedHeaders}`,
@@ -194,11 +201,11 @@ export function buildAuthorization(data: {
 
 /**
  * Method to parse an Authorization header. The Authorization
- * should follow the syntax of {{buildAuthorization}} and
+ * should follow the syntax of [[buildAuthorization]] and
  * must NOT contain additional fields (but may have them in
  * any order). Note that no validation is done on any of the
- * returned values other than signature (prior to parsing).
- * @returns Header values (see {{buildAuthorization}} argument)
+ * returned values other than signature.
+ * @returns Header values (see [[buildAuthorization]] argument)
  * @throws If there's a syntax error
  */
 export function parseAuthorization(header: string) {
@@ -233,20 +240,20 @@ export function parseAuthorization(header: string) {
 }
 
 /**
- * Signs an HTTP request using {{getCanonical}}, calculating
- * its digest and signing it with {{signDigest}}. It then returns
+ * Signs an HTTP request using [[getCanonical]], calculating
+ * its digest and signing it with [[signDigest]]. It then returns
  * the generated parameters for header / query authorization.
  *
  * The input parameters are never modified, regardless of the `set` option.
  *
  * The timestamp is taken from the `X-Amz-Date` header (or query parameter,
  * if query signing is requested). If not present, it's generated with
- * {{formatTimestamp}} and returned along with the other authorization
+ * [[formatTimestamp]] and returned along with the other authorization
  * parameters.
  *
  * This is a low-level function, it doesn't perform any normalization
  * and assumes all required headers / parameters are there. Most
- * users will want {{signRequest}} instead.
+ * users will want [[signRequest]] instead.
  *
  * @param credentials Credentials to sign request with
  * @param method HTTP method
@@ -257,6 +264,7 @@ export function parseAuthorization(header: string) {
  *             calculate it yourself and pass it as `{ hash: '<hex>' }`)
  * @param options Other options
  * @returns Authentication headers / query parameters
+ * @category Signing
  */
 export function signRequestRaw(
     credentials: Credentials,
@@ -266,7 +274,7 @@ export function signRequestRaw(
     headers: OutgoingHttpHeaders,
     body: SignedRequest["body"],
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
-) {
+): {[key: string]: string} {
     const isQuery = options && options.query
     const result: {[key: string]: string} = {}
 
@@ -312,7 +320,7 @@ export function signRequestRaw(
  * `AWS-HMAC-SHA256` with either headers (`Authorization`) or query
  * parameters (presigned URL) depending on the `query` option.
  * 
- * It populates some parameters (see below), calls {{signRequestRaw}} and
+ * It populates some parameters (see below), calls [[signRequestRaw]] and
  * (if `set` is enabled) adds the parameters to `headers` or `searchParams`.
  *
  *  - If `serviceName` or `regionName` are not present, they are detected
@@ -324,7 +332,7 @@ export function signRequestRaw(
  * 
  *  - The timestamp is taken from the `X-Amz-Date` header (or query parameter,
  *    if query signing is requested). If not present, it's generated with
- *    {{formatTimestamp}} and returned/set along with the other authorization
+ *    [[formatTimestamp]] and returned/set along with the other authorization
  *    parameters.
  * 
  * Keep in mind headers are matched case insensitively (and returned in
@@ -334,9 +342,10 @@ export function signRequestRaw(
  * be replaced with a new string; otherwise `url.searchParams` will be mutated.
  *
  * @param credentials Credentials to sign the request with
- * @param request HTTP request to sign, see {{SignedRequest}}
+ * @param request HTTP request to sign, see [[SignedRequest]]
  * @param options Other options
  * @returns Authorization headers / query parameters
+ * @category Signing
  */
 export function signRequest(
     credentials: RelaxedCredentials,

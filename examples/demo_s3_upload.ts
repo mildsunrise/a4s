@@ -7,7 +7,7 @@ import { URL } from 'url'
 import * as https from 'https'
 import { pipeline } from 'stream'
 import { statSync, createReadStream } from 'fs'
-import { createPayloadSigner } from '../src/s3_chunked'
+import { createS3PayloadSigner } from '../src/s3_chunked'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
@@ -23,7 +23,7 @@ const fileSize = statSync(args[1]).size
 const input = createReadStream(args[1])
 
 const request = { method: 'PUT', url }
-const { signer } = createPayloadSigner(
+const { signer } = createS3PayloadSigner(
     { accessKey, secretKey }, request, fileSize, 64 * 1024, { set: true })
 
 console.log('Sending request:', request)

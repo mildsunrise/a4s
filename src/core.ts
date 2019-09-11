@@ -1,12 +1,16 @@
 /**
  * Code for signing generic messages using AWS Signature version 4.
  * 
- * This module contains only common signing logic (i.e. not HTTP specific).
+ * This module contains only common signing logic (i.e. not HTTP specific);
+ * main functions are [[formatTimestamp]] to generate timestamps, [[getSigning]]
+ * to derive the signing key, and [[signDigest]] to sign a hash.
  */
+/** */
 
 import { createHmac } from 'crypto'
 
 export interface SignOptions {
+    /** Specify an alternate implementation of [[getSigningData]], i.e. a cached one */
     getSigningData?: GetSigningData
 }
 
@@ -30,7 +34,7 @@ export interface Credentials extends RelaxedCredentials {
     serviceName: string
 }
 
-/** Format the date stamp for getSigningData (low-level). */
+/** Format the date stamp for [[getSigningData]] (low-level). */
 export function formatDate(date?: Date) {
     const str = (date || new Date()).toISOString()
     if (str.length !== 24) {
@@ -42,10 +46,11 @@ export function formatDate(date?: Date) {
 /**
  * Derive the signature key and credential scope (low-level)
  * 
- * `dateStamp` can be created with {{formatDate}}. Because it's cropped
- * to 8 characters, a full timestamp (see {{formatTimestamp}}) also works.
+ * `dateStamp` can be created with [[formatDate]]. Because it's cropped
+ * to 8 characters, a full timestamp (see [[formatTimestamp]]) also works.
  * 
  * @returns Signing data (key and credentials scope)
+ * @category Key derivation
  */
 export function getSigningData(dateStamp: string, secretKey: string, regionName: string, serviceName: string): SigningData {
     dateStamp = dateStamp.substring(0, 8)
@@ -57,7 +62,7 @@ export function getSigningData(dateStamp: string, secretKey: string, regionName:
     return { key, scope: parts.join('/') }
 }
 
-/** Make a simple reuse-previous-result cache for getSigningData */
+/** Make a simple reuse-previous-result cache for [[getSigningData]] */
 getSigningData.makeSimpleCache = (): GetSigningData => {
     let key: string
     let value: SigningData
@@ -83,8 +88,9 @@ export function formatTimestamp(date?: Date) {
  * Sign an arbitrary string using the derived key (low-level)
  * 
  * @param sts String to sign
- * @param key The signing key obtained from {{getSigningData}}
+ * @param key The signing key obtained from [[getSigningData]]
  * @returns The binary signature
+ * @category Signing
  */
 export const signString = (key: Buffer, sts: string | Buffer) =>
     createHmac('sha256', key).update(sts).digest()
@@ -98,8 +104,9 @@ export const MAIN_ALGORITHM = 'AWS4-HMAC-SHA256'
  * @param algorithm Algorithm used for calculating `payloadDigest`, i.e. `AWS4-HMAC-SHA256`
  * @param payloadDigest The payload digest (typically hex-encoded)
  * @param timestamp Timestamp used in the request
- * @param signing The signing data obtained from {{getSigningData}} (its date should match `timestamp`)
+ * @param signing The signing data obtained from [[getSigningData]] pr [[getSigning]] (its date should match `timestamp`)
  * @returns The binary signature
+ * @category Signing
  */
 export const signDigest = (algorithm: string, payloadDigest: string,
                            timestamp: string, signing: SigningData) =>
@@ -107,12 +114,13 @@ export const signDigest = (algorithm: string, payloadDigest: string,
         [algorithm, timestamp, signing.scope, payloadDigest].join('\n'))
 
 /**
- * Convenience version of {{getSigningData}} that accepts a
+ * Convenience version of [[getSigningData]] that accepts a
  * `Credentials` object, and also returns a credential string.
  *
  * @param dateStamp The timestamp / date stamp
  * @param credentials Credentials to derive from
  * @returns Signing data and credential string
+ * @category Key derivation
  */
 export function getSigning(dateStamp: string, credentials: Credentials, options?: SignOptions) {
     const { accessKey, secretKey, regionName, serviceName } = credentials
@@ -122,14 +130,15 @@ export function getSigning(dateStamp: string, credentials: Credentials, options?
 }
 
 /**
- * High-level function that uses {{getSigning}} to derive the
- * signing key, and then {{signDigest}} to calculate the signature.
+ * High-level function that uses [[getSigning]] to derive the
+ * signing key, and then [[signDigest]] to calculate the signature.
  *
  * @param credentials Info to derive key and credentials scope
  * @param algorithm Algorithm used for calculating `payloadDigest`, i.e. `AWS4-HMAC-SHA256`
  * @param payloadDigest The payload digest
  * @param timestamp Timestamp used in the request
  * @returns The signature and credential string
+ * @category Signing
  */
 export function sign(credentials: Credentials, algorithm: string, payloadDigest: string, timestamp: string, options?: SignOptions) {
     const { signing, credential } = getSigning(timestamp, credentials, options)

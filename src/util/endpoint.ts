@@ -55,7 +55,7 @@ export function parseHost(host: string) {
 
 /**
  * Obtain the (most common) endpoint for a service on a region.
- * This uses the <service>.<region> format.
+ * This uses the `<service>.<region>` format.
  */
 export function formatHost(serviceName: string, regionName?: string, port?: number | string) {
     if ({}.hasOwnProperty.call(ENDPOINT_OVERRIDES, serviceName)) {

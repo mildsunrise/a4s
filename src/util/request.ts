@@ -1,6 +1,7 @@
 /**
  * Utilities to normalize and work with requests and headers.
  */
+/** */
 
 import { SignedRequest } from '../http'
 import { RequestOptions } from 'http'
@@ -15,7 +16,7 @@ const normalizeValue = (value: string | string[] | number | undefined) =>
  * @param headers Headers object
  * @param name Name of header to find
  * @returns Array with name and value (as string); if not found
- * then [name, undefined] will be returned.
+ * then [name.toLowerCase(), undefined] will be returned.
  */
 export function getHeader(
     headers: {[key: string]: string | string[] | number | undefined} | undefined,
@@ -33,7 +34,7 @@ export function getHeader(
 }
 
 /**
- * Generate HTTP request options from a {{SignedRequest}} object.
+ * Generate HTTP request options from a [[SignedRequest]] object.
  */
 export function toRequestOptions(request: SignedRequest): RequestOptions {
     let { method, url, headers } = request
@@ -45,7 +46,7 @@ export function toRequestOptions(request: SignedRequest): RequestOptions {
 }
 
 /**
- * Gemerate a URL string from the `url` field of a {{SignedRequest}}.
+ * Gemerate a URL string from the `url` field of a [[SignedRequest]].
  */
 export function toURL(url: SignedRequest["url"]) {
     if (typeof url === 'string') {
