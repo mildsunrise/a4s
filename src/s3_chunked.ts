@@ -129,7 +129,7 @@ export function signS3ChunkedRequest(
 
     // Set headers
     const [ encodingName, encoding ] = getHeader(headers, 'content-encoding')
-    if (!(encoding && /^aws-chunked($|,)/i.test(encoding))) {
+    if (!(encoding && /^\s*aws-chunked\s*($|,)/i.test(encoding))) {
         extra[encodingName] = 'aws-chunked' + (encoding ? `,${encoding}` : '')
     }
     let timestamp = getHeader(headers, 'x-amz-date')[1]
@@ -153,24 +153,25 @@ export function signS3ChunkedRequest(
     const signing = derive(timestamp, credentials.secretKey, regionName, serviceName)
 
     // Chunk signer implementation
-    let dataCount = 0
     let signature = auth.signature.toString('hex')
+    let dataCount = 0
+    let done = false
 
     const signer: ChunkSigner = function chunkSigner(chunk) {
-        let length = 0, header = finalHeader
-        if (chunk && chunk.length) {
-            [ length, header ] = [ chunkLength, chunkHeader ]
-            if (bodyLength - dataCount < chunkLength) {
-                [ length, header ] = [ lastLength, lastHeader ]
-            }
-            if (chunk.length !== length) {
-                throw new Error(`Unexpected chunk size (got ${chunk.length}, expected ${length})`)
-            }
-            dataCount += length
-        } else if (dataCount !== bodyLength) {
-            throw new Error('Empty chunks are not allowed, except for final one')
+        if (done) {
+            throw new Error('Payload is complete, no more calls are needed')
+        }
+        let length = chunkLength, header = chunkHeader
+        if (bodyLength - dataCount < chunkLength) {
+            [ length, header ] = (dataCount !== bodyLength) ?
+                [ lastLength, lastHeader ] : [ 0, finalHeader ]
+        }
+        if ((chunk ? chunk.length : 0) !== length) {
+            throw new Error(`Unexpected chunk size (got ${chunk && chunk.length}, expected ${length})`)
         }
         signature = signS3Chunk(signature, signing, timestamp!, chunk)
+        dataCount += length
+        done = !length
         return (dataCount === length ? '' : CRLF) +
             header + signature + CRLF + (length ? '' : CRLF)
     }
@@ -220,13 +221,14 @@ export function createS3PayloadSigner(
 
     const stream = new Transform({
         transform(data: Buffer, _, callback) {
-            if (length + data.length < chunkLength) {
-                data.length && pushData(data)
-                return callback()
+            while (length + data.length >= chunkLength) {
+                const l = (chunkLength - length)
+                pushData(data.slice(0, l)) // mutates length!
+                flushData(this)
+                data = data.slice(l)
             }
-            pushData(data.slice(0, chunkLength - length))
-            flushData(this)
-            this._transform(data.slice(chunkLength - length), _, callback)
+            data.length && pushData(data)
+            callback()
         },
         final(callback) {
             length && flushData(this)
