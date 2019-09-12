@@ -55,6 +55,9 @@ export function toURL(url: SignedRequest["url"]) {
     if (url instanceof URL) {
         return url.toString()
     }
+    if (url.pathname && url.pathname[0] !== '/') {
+        throw new Error("Pathname without leading slash can't be converted to URL")
+    }
     const origin = url.host ? `https://${url.host}` : ''
     const query = url.searchParams && url.searchParams.toString()
     const pathname = url.pathname ? encodeURI(url.pathname) : '/'

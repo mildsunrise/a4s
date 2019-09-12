@@ -73,6 +73,7 @@ describe('request utilities', () => {
         expect(toURL({
             host: 'yeah'
         })).toBe('https://yeah/')
+        expect(() => toURL({ pathname: 'test' })).toThrow()
         expect(toURL(new URL('http://test/path'))).toBe('http://test/path')
         expect(toURL('string returns unchanged')).toBe('string returns unchanged')
     })
