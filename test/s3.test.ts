@@ -1,3 +1,4 @@
+import { URLSearchParams } from 'url'
 import { signS3Policy, signS3Request } from '../src/s3'
 
 const oDate = Date
@@ -36,12 +37,95 @@ describe('S3 signing', () => {
                 }
             })
         })
+
+        it('pre-existing headers', () => {
+            const requestbuilder = () => ({
+                url: {
+                    pathname: '/folder A',
+                },
+                headers: {
+                    'x-aMz-content-sha256': 'overriden',
+                    'foo': 'bar',
+                }
+            })
+            const request = requestbuilder(), request2 = requestbuilder()
+            const headers1 = signS3Request(credentials, request2)
+            expect((request2.url as any).host).toBe('s3.amazonaws.com')
+            delete (request2.url as any).host
+            expect(request2).toStrictEqual(request)
+            expect(headers1).toStrictEqual({
+                'x-amz-date': '20190901T084743Z',
+                authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=7f7e4fb707ee43d80f2bc8f69e41a6ac4105991a7f1f665dc70d3828612e0391'
+            })
+
+            const headers2 = signS3Request(credentials, request2, { set: true })
+            expect(headers1).toStrictEqual(headers2)
+            expect(request2).toStrictEqual({
+                url: {
+                    host: 's3.amazonaws.com',
+                    pathname: '/folder A',
+                },
+                headers: {
+                    'x-aMz-content-sha256': 'overriden',
+                    'foo': 'bar',
+                    'x-amz-date': '20190901T084743Z',
+                    authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=7f7e4fb707ee43d80f2bc8f69e41a6ac4105991a7f1f665dc70d3828612e0391'
+                }
+            })
+        })
+
+        it('unsigned payload', () => {
+            const requestbuilder = () => ({
+                url: {
+                    host: 'example.s3.us-east-1.amazonaws.com:80',
+                    pathname: '/folder A',
+                    searchParams: new URLSearchParams({ 'list-type': '2' })
+                },
+                headers: {
+                    'foo': 'bar',
+                },
+                body: 'should be ignored',
+                unsigned: true,
+            })
+            const request = requestbuilder(), request2 = requestbuilder()
+            const headers1 = signS3Request(credentials, request2)
+            expect(request2).toStrictEqual(request)
+            expect(headers1).toStrictEqual({
+                'x-amz-date': '20190901T084743Z',
+                'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+                authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=9368eeb2de103f930a23fbbedd6a937077a63683a92566e561101aead1a51996'
+            })
+
+            const headers2 = signS3Request(credentials, request2, { set: true })
+            expect(headers1).toStrictEqual(headers2)
+            expect(request2).toStrictEqual({
+                url: {
+                    host: 'example.s3.us-east-1.amazonaws.com:80',
+                    pathname: '/folder A',
+                    searchParams: new URLSearchParams({ 'list-type': '2' })
+                },
+                headers: {
+                    'foo': 'bar',
+                    'x-amz-content-sha256': 'UNSIGNED-PAYLOAD',
+                    'x-amz-date': '20190901T084743Z',
+                    authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=9368eeb2de103f930a23fbbedd6a937077a63683a92566e561101aead1a51996'
+                },
+                body: 'should be ignored',
+                unsigned: true,
+            })
+        })
     })
 
     describe('query based', () => {
+        const sortstr = (x: URLSearchParams) => {
+            x.sort()
+            return x.toString()
+        }
+
         it('basic test', () => {
             const request = {
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder A?list-type=2',
+                body: 'should be ignored',
             }
             const request2 = { ...request }
             const query1 = signS3Request(credentials, request2, { query: true })
@@ -58,7 +142,96 @@ describe('S3 signing', () => {
             const query2 = signS3Request(credentials, request2, { query: true, set: true })
             expect(query1).toStrictEqual(query2)
             expect(request2).toStrictEqual({
-                url: 'https://examplebucket.s3.amazonaws.com/root//folder%20A?list-type=2&X-Amz-Expires=604800&X-Amz-Date=20190901T084743Z&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20190901%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=2a90f4809bc072d7e58b670b7888dbb932f405f355169ebb9fba2dd27f939153'
+                url: 'https://examplebucket.s3.amazonaws.com/root//folder%20A?list-type=2&X-Amz-Expires=604800&X-Amz-Date=20190901T084743Z&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20190901%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=2a90f4809bc072d7e58b670b7888dbb932f405f355169ebb9fba2dd27f939153',
+                body: 'should be ignored',
+            })
+        })
+
+        it('allows user to specify X-Amz-Expires', () => {
+            const request = {
+                url: 'https://examplebucket.s3.amazonaws.com/root//folder A?list-type=2&X-Amz-Expires=2000',
+            }
+            const request2 = { ...request }
+            const query1 = signS3Request(credentials, request2, { query: true })
+            expect(request2).toStrictEqual(request)
+            expect(query1).toStrictEqual({
+                'X-Amz-Date': '20190901T084743Z',
+                'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+                'X-Amz-Credential': 'AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request',
+                'X-Amz-SignedHeaders': 'host',
+                'X-Amz-Signature': '97f953c9a545dbe43e3d16425aba8f52c764ba72e22d6cda563fddb8b549b95c'
+            })
+
+            const query2 = signS3Request(credentials, request2, { query: true, set: true })
+            expect(query1).toStrictEqual(query2)
+            expect(request2).toStrictEqual({
+                url: 'https://examplebucket.s3.amazonaws.com/root//folder%20A?list-type=2&X-Amz-Expires=2000&X-Amz-Date=20190901T084743Z&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20190901%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=97f953c9a545dbe43e3d16425aba8f52c764ba72e22d6cda563fddb8b549b95c'
+            })
+        })
+
+        it('infers host', () => {
+            const requestbuilder = () => ({
+                url: {
+                    pathname: '/examplebucket/root//folder A',
+                    searchParams: new URLSearchParams({ 'list-type': '2' }),
+                },
+            })
+            const request = requestbuilder(), request2 = requestbuilder()
+            const query1 = signS3Request(credentials, request2, { query: true })
+            expect((request2.url as any).host).toBe('s3.amazonaws.com')
+            delete (request2.url as any).host
+            expect(request2).toStrictEqual(request)
+            expect(query1).toStrictEqual({
+                'X-Amz-Expires': '604800',
+                'X-Amz-Date': '20190901T084743Z',
+                'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+                'X-Amz-Credential': 'AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request',
+                'X-Amz-SignedHeaders': 'host',
+                'X-Amz-Signature': '92086108c9882d5cf2797746769d7c3ab1bfeb569af3f4aa922a15368f06d84b'
+            })
+
+            const query2 = signS3Request(credentials, request2, { query: true, set: true })
+            expect(query1).toStrictEqual(query2)
+            expect((request2.url as any).host).toBe('s3.amazonaws.com')
+            expect((request2.url.pathname)).toBe(request.url.pathname)
+            expect(sortstr(request2.url.searchParams)).toBe(sortstr(new URLSearchParams(
+                { 'list-type': '2', ...query1 }
+            )))
+        })
+
+        it('populates url.searchParams if needed', () => {
+            const requestbuilder = () => ({
+                url: {
+                    host: 'examplebucket.s3.us-west-1.amazonaws.com',
+                    pathname: '/root//folder A',
+                },
+                headers: {
+                    foo: 'bar',
+                }
+            })
+            const request = requestbuilder(), request2 = requestbuilder()
+            const query1 = signS3Request(credentials, request2, { query: true })
+            expect(request2).toStrictEqual(request)
+            expect(query1).toStrictEqual({
+                'X-Amz-Expires': '604800',
+                'X-Amz-Date': '20190901T084743Z',
+                'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
+                'X-Amz-Credential': 'AKIAIOSFODNN7EXAMPLE/20190901/us-west-1/s3/aws4_request',
+                'X-Amz-SignedHeaders': 'foo;host',
+                'X-Amz-Signature': '536f36e0569f06f251ed8efc9393d7871d5fbf47d3671fbec16b987ebb05414f'
+            })
+
+            const query2 = signS3Request(credentials, request2, { query: true, set: true })
+            expect(query1).toStrictEqual(query2)
+            expect(request2).toStrictEqual({
+                url: {
+                    host: 'examplebucket.s3.us-west-1.amazonaws.com',
+                    pathname: '/root//folder A',
+                    searchParams: new URLSearchParams(query1),
+                },
+                headers: {
+                    foo: 'bar',
+                }
             })
         })
     })

@@ -131,6 +131,9 @@ export function signS3Request(
         typeof originalRequest.url === 'string') {
         originalRequest.url = (url as URL).toString()
     }
+    if (typeof originalRequest.url !== 'string' && !originalRequest.url.host) {
+        originalRequest.url.host = url.host
+    }
     return result
 }
 

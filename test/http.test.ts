@@ -211,7 +211,7 @@ describe('HTTP signing', () => {
             expect(request.headers!.authorization).toBe('AWS4-HMAC-SHA256 Credential=access_test/20190830/us-east-1/ec2/aws4_request, SignedHeaders=host;x-amz-date, Signature=afc0e2557e1c0bc4d8cb15aaf8df57d862fda39caa9cc574215f10987816710c')
         })
 
-        it('auto-signs the request inferring the endpoint (without region)', () => {
+        it('populates endpoint (without region) regardless of «set»', () => {
             const request: SignedRequest = {
                 url: { 
                     searchParams: new URLSearchParams({
@@ -225,6 +225,19 @@ describe('HTTP signing', () => {
             signRequest({ ...credentials, serviceName: 'ec2' }, request, { set: true })
             expect((request.url as any).host).toBe('ec2.amazonaws.com')
             expect(request.headers!.authorization).toBe('AWS4-HMAC-SHA256 Credential=access_test/20190830/us-east-1/ec2/aws4_request, SignedHeaders=host;x-amz-date, Signature=afc0e2557e1c0bc4d8cb15aaf8df57d862fda39caa9cc574215f10987816710c')
+
+            const request2: SignedRequest = {
+                url: { 
+                    searchParams: new URLSearchParams({
+                        Action: 'DescribeRegions', Version: '2013-10-15',
+                    }),
+                },
+                headers: {
+                    'x-amz-date': '20190830T164820Z',
+                },
+            }
+            signRequest({ ...credentials, serviceName: 'ec2' }, request2)
+            expect((request2.url as any).host).toBe('ec2.amazonaws.com')
         })
 
         it('signs a POST with body', () => {
