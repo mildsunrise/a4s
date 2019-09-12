@@ -69,7 +69,7 @@ function renderUploadForm(key: string, req: IncomingMessage, res: ServerResponse
                 <h1>Upload file</h1>
                 <p>Use this form to upload a file to S3 (max 2MB). <br>
                    The file will be uploaded at: <code>${escape(key)}</code></p>
-                <form action="http://${escape(bucket)}.s3.amazonaws.com/"
+                <form action="https://${escape(bucket)}.s3.amazonaws.com/"
                       method="post" enctype="multipart/form-data">
                     ${paramsHtml}
                     <input id="chooser" type="file" name="file">

@@ -8,6 +8,7 @@ import * as https from 'https'
 import { pipeline } from 'stream'
 import { statSync, createReadStream } from 'fs'
 import { createS3PayloadSigner } from '../src/s3_chunked'
+import { toRequestOptions } from '../src/util/request'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
@@ -27,7 +28,7 @@ const { signer } = createS3PayloadSigner(
     { accessKey, secretKey }, request, fileSize, 64 * 1024, { set: true })
 
 console.log('Sending request:', request)
-const output = https.request(request.url, request, response => {
+const output = https.request(toRequestOptions(request), response => {
     console.log(`Got ${response.statusCode} response:`)
     response.pipe(process.stdout)
 })
