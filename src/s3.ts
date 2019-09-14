@@ -52,7 +52,7 @@ function patchURL(
         const { host, pathname, searchParams } = url
         url = { host, pathname, searchParams: new URLSearchParams(searchParams) }
     }
-    Object.keys(extra).forEach(k => url.searchParams!.append(k, extra[k]))
+    Object.keys(extra).forEach(k => url.searchParams!.set(k, extra[k]))
     return url
 }
 

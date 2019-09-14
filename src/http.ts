@@ -273,6 +273,8 @@ export function signRequestRaw(
 ): {[key: string]: string} {
     const isQuery = options && options.query
     const result: {[key: string]: string} = {}
+    const parameter = isQuery ?
+        'X-Amz-Signature' : getHeader(headers, 'authorization')[0]
 
     // Extract / populate timestamp
     let timestamp = isQuery ?
@@ -280,20 +282,24 @@ export function signRequestRaw(
     if (!timestamp) {
         const name = isQuery ? 'X-Amz-Date' : 'x-amz-date'
         timestamp = result[name] = formatTimestamp()
-        headers = isQuery ? headers : { ...headers, ...result }
     }
 
     // Derive signing key
     const { signing, credential } = getSigning(timestamp, credentials, options)
 
-    // Set other parameters if needed
+    // Set other parameters if needed, delete final parameter
+    if (!isQuery) {
+        headers = { ...headers, ...result }
+        delete headers[parameter]
+    }
     const cheaders = getCanonicalHeaders(headers)
     if (isQuery) {
         result['X-Amz-Algorithm'] = MAIN_ALGORITHM
         result['X-Amz-Credential'] = credential
         result['X-Amz-SignedHeaders'] = cheaders[1]
         query = new URLSearchParams(query)
-        Object.keys(result).forEach(k => query.append(k, result[k]))
+        Object.keys(result).forEach(k => query.set(k, result[k]))
+        query.delete(parameter)
     }
 
     // Construct canonical request, digest, and sign
@@ -301,13 +307,10 @@ export function signRequestRaw(
     const digest = createHash('sha256').update(creq).digest('hex')
     const signature = signDigest(MAIN_ALGORITHM, digest, timestamp, signing)
 
-    // Return parameters
-    if (isQuery) {
-        result['X-Amz-Signature'] = signature.toString('hex')
-    } else {
-        result['authorization'] = buildAuthorization({ signature, credential,
+    // Add final parameter
+    result[parameter] = isQuery? signature.toString('hex') :
+        buildAuthorization({ signature, credential,
             algorithm: MAIN_ALGORITHM, signedHeaders: cheaders[1] })
-    }
     return result
 }
 
@@ -331,8 +334,8 @@ export function signRequestRaw(
  *    [[formatTimestamp]] and returned/set along with the other authorization
  *    parameters.
  * 
- * Keep in mind headers are matched case insensitively (and returned in
- * lowercase), but query parameters aren't.
+ * Keep in mind headers are matched case insensitively,
+ * but query parameters aren't.
  * 
  * For query signing: If `set` is enabled and `url` is a string, it will
  * be replaced with a new string; otherwise `url.searchParams` will be mutated.
@@ -378,7 +381,7 @@ export function signRequest(
             if (!url.searchParams) {
                 url.searchParams = query
             }
-            Object.keys(result).forEach(k => query.append(k, result[k]))
+            Object.keys(result).forEach(k => query.set(k, result[k]))
             if (typeof request.url === 'string') {
                 request.url = (url as URL).toString()
             }

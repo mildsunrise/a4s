@@ -1,5 +1,5 @@
 import { URLSearchParams } from 'url'
-import { signS3Policy, signS3Request } from '../src/s3'
+import { signS3Policy, signS3Request, SignedS3Request } from '../src/s3'
 
 const oDate = Date
 const date = jest.spyOn(global, 'Date').mockImplementation(((s: any) => {
@@ -17,7 +17,7 @@ describe('S3 signing', () => {
             const request = {
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder A?list-type=2',
             }
-            const request2 = { ...request }
+            const request2: SignedS3Request = { ...request }
             const headers1 = signS3Request(credentials, request2)
             expect(request2).toStrictEqual(request)
             expect(headers1).toStrictEqual({
@@ -36,6 +36,15 @@ describe('S3 signing', () => {
                     authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=26e0ce918d316644d24ede2e351ed6b727ce2740527721c5631a494629f54bfb'
                 }
             })
+
+            // signing request again should produce same result
+            const request3 = { url: request2.url, headers: { ...request2.headers } }
+            const headers3 = signS3Request(credentials, request3)
+            expect(request3).toStrictEqual(request2)
+            expect({ ...headers2, ...headers3 }).toStrictEqual(headers2) // headers3 must be subset of headers2
+            const headers4 = signS3Request(credentials, request3, { set: true })
+            expect(request3).toStrictEqual(request2)
+            expect(headers4).toStrictEqual(headers3)
         })
 
         it('pre-existing headers', () => {
@@ -145,6 +154,15 @@ describe('S3 signing', () => {
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder%20A?list-type=2&X-Amz-Expires=604800&X-Amz-Date=20190901T084743Z&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20190901%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=2a90f4809bc072d7e58b670b7888dbb932f405f355169ebb9fba2dd27f939153',
                 body: 'should be ignored',
             })
+
+            // signing request again should produce same result
+            const request3 = { ...request2 }
+            const query3 = signS3Request(credentials, request3, { query: true })
+            expect(request3).toStrictEqual(request2)
+            expect({ ...query2, ...query3 }).toStrictEqual(query2) // query3 must be subset of query2
+            const query4 = signS3Request(credentials, request3, { query: true, set: true })
+            expect(request3).toStrictEqual(request2)
+            expect(query4).toStrictEqual(query3)
         })
 
         it('allows user to specify X-Amz-Expires', () => {
