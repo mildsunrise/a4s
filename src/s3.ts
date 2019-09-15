@@ -12,9 +12,8 @@ import { URLSearchParams, URL } from 'url'
 
 import { formatTimestamp, getSigning, signString, MAIN_ALGORITHM,
     RelaxedCredentials, GetSigningData, SignOptions } from './core'
-import { hashBody, signRequest, SignHTTPOptions, CanonicalOptions, SignedRequest } from './http'
+import { signRequest, SignHTTPOptions, CanonicalOptions, SignedRequest } from './http'
 import { DEFAULT_REGION } from './util/endpoint'
-import { getHeader } from './util/request'
 
 export interface PolicySignOptions {
     timestamp?: string | Date
@@ -32,7 +31,8 @@ export const EXPIRES_MAX = 604800
 /** Option defaults for the S3 service */
 export const S3_OPTIONS = {
     dontNormalize: true,
-    onlyEncodeOnce: true
+    onlyEncodeOnce: true,
+    setContentHash: true,
 }
 
 /** Special value for payload digest, which indicates the payload is not signed */
@@ -56,17 +56,6 @@ function patchURL(
     return url
 }
 
-function patchHeaders(
-    request: SignedS3Request,
-    extra: {[key: string]: string},
-    set?: boolean
-) {
-    const headers = set ?
-        (request.headers = request.headers || {}) : { ...request.headers }
-    Object.keys(extra).forEach(k => { headers[k] = extra[k] })
-    return headers
-}
-
 /**
  * High-level function that signs an HTTP request for S3 using
  * `AWS-HMAC-SHA256` with either headers (`Authorization`) or query
@@ -74,19 +63,18 @@ function patchHeaders(
  * 
  * This is a special version of [[signRequest]] that implements
  * some quirks needed for S3:
- * 
- *  - For header authorization, the `x-amz-content-sha256` is
- *    set to the body hash used to calculate the signature.
- *    Also, you can set `unsigned` in the request to set hash
- *    to `UNSIGNED_PAYLOAD`.
+ *
+ *  - You can set `unsigned` in the request to leave payload unsigned
+ *    (body hash is set to `UNSIGNED_PAYLOAD`). For query authorization
+ *    it's on by default (S3 query authorization can't sign the body).
  *
  *  - For query authorization, the `X-Amz-Expires` parameter is
- *    set to `EXPIRES_MAX` if not present. The body hash is set to
- *    `UNSIGNED_PAYLOAD` (for S3, query authorization can't sign the body).
+ *    set to `EXPIRES_MAX` if not present.
  *
  *  - `S3_OPTIONS` are applied by default (disables normalization
- *    and double encoding for pathname when calculating signature)
- *    and `serviceName` defaults to `s3` if host was not passed.
+ *    and double encoding when calculating signature, adds
+ *    `x-amz-content-sha256` for header authorization). Also,
+ *    `serviceName` defaults to `s3` if host was not passed.
  *
  * The extra parameters are returned with the others, and also
  * set if requested.
@@ -101,33 +89,27 @@ export function signS3Request(
    request: SignedS3Request,
    options?: SignHTTPOptions & CanonicalOptions & SignOptions
 ): {[key: string]: string} {
-    let { url, body, unsigned, headers } = request
+    const isQuery = options && options.query
+    let { url, body, unsigned } = { unsigned: isQuery, ...request }
     url = typeof url === 'string' ? new URL(url) : url
     const originalRequest = request
     const extra: {[key: string]: string} = {}
 
-    if (options && options.query) {
-        body = unsigned === false ? body : { hash: PAYLOAD_UNSIGNED }
+    if (isQuery) {
         if (!(url.searchParams && url.searchParams.has('X-Amz-Expires'))) {
             extra['X-Amz-Expires'] = EXPIRES_MAX.toString()
             url = patchURL(request, extra, url, options && options.set)
         }
-        request = { ...request, url, body }
-    } else {
-        const hash = unsigned ? PAYLOAD_UNSIGNED : hashBody(body, options)
-        if (!getHeader(headers, 'x-amz-content-sha256')[1]) {
-            extra['x-amz-content-sha256'] = hash
-            headers = patchHeaders(request, extra, options && options.set)
-        }
-        request = { ...request, url, headers, body: { hash } }
     }
+    body = unsigned ? { hash: PAYLOAD_UNSIGNED } : body
+    request = { ...request, url, body }
 
     if (typeof request.url !== 'string' && !request.url.host) {
         credentials = { serviceName: 's3', ...credentials }
     }
     const result = { ...extra, ...signRequest(
         credentials, request, { ...S3_OPTIONS, ...options }) }
-    if (options && options.set && options.query &&
+    if (options && options.set && isQuery &&
         typeof originalRequest.url === 'string') {
         originalRequest.url = (url as URL).toString()
     }

@@ -18,7 +18,9 @@ import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
 import { getHeader } from './util/request'
 
 export interface CanonicalOptions {
+    /** Disable path normalization (i.e. `.`, `..`, consecutive slashes) */
     dontNormalize?: boolean
+    /** Don't percent-encode path segments twice */
     onlyEncodeOnce?: boolean
 }
 
@@ -32,6 +34,10 @@ export interface SignHTTPOptions {
      * Return query authorization parameters instead of headers (the default)
      */
     query?: boolean
+    /**
+     * For header authorization, set the `x-amz-content-sha256` header
+     */
+    setContentHash?: boolean
 }
 
 export interface SignedRequest {
@@ -284,6 +290,12 @@ export function signRequestRaw(
         timestamp = result[name] = formatTimestamp()
     }
 
+    // Calculate body hash
+    const hash = hashBody(body)
+    if (!isQuery && options && options.setContentHash) {
+        result[getHeader(headers, 'x-amz-content-sha256')[0]] = hash
+    }
+
     // Derive signing key
     const { signing, credential } = getSigning(timestamp, credentials, options)
 
@@ -303,7 +315,7 @@ export function signRequestRaw(
     }
 
     // Construct canonical request, digest, and sign
-    const creq = getCanonical(method, pathname, query, cheaders, body, options)
+    const creq = getCanonical(method, pathname, query, cheaders, { hash }, options)
     const digest = createHash('sha256').update(creq).digest('hex')
     const signature = signDigest(MAIN_ALGORITHM, digest, timestamp, signing)
 
