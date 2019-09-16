@@ -356,6 +356,9 @@ export function signRequestRaw(
  * @param request HTTP request to sign, see [[SignedRequest]]
  * @param options Other options
  * @returns Authorization headers / query parameters
+ * @throws If duplicate headers are passed (see note about headers)
+ * @throws If neither `serviceName` nor `url.host` is passed, or if
+ *         `url.host` can't be parsed to extract `serviceName`.
  * @category Signing
  */
 export function signRequest(

@@ -266,6 +266,9 @@ describe('S3 signing', () => {
                 srcPolicy,
             )
             expect(date).toHaveBeenCalledTimes(1)
+            expect(srcPolicy).toStrictEqual({
+                expires: new Date(1567327687881).toISOString(),
+            })
             const policy = JSON.parse(Buffer.from(params.policy!, 'base64').toString())
             expect(policy).toStrictEqual({
                 expires: '2019-09-01T08:48:07.881Z',

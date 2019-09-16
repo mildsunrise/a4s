@@ -100,10 +100,11 @@ export const signString = (key: Buffer, sts: string | Buffer) =>
 export const MAIN_ALGORITHM = 'AWS4-HMAC-SHA256'
 
 /**
- * Construct and sign a standard payload digest string (low-level)
+ * Construct a standard payload digest string,
+ * and sign it with {{signString}} (low-level)
  *
  * @param algorithm Algorithm used for calculating `payloadDigest`, i.e. `AWS4-HMAC-SHA256`
- * @param payloadDigest The payload digest (typically hex-encoded)
+ * @param payloadDigest The payload digest (typically a hex-encoded hash)
  * @param timestamp Timestamp used in the request
  * @param signing The signing data obtained from [[getSigningData]] pr [[getSigning]] (its date should match `timestamp`)
  * @returns The binary signature
