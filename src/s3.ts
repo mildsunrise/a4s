@@ -100,6 +100,8 @@ export function signS3Request(
             extra['X-Amz-Expires'] = EXPIRES_MAX.toString()
             url = patchURL(request, extra, url, options && options.set)
         }
+    } else if (options && options.set) {
+        request.headers = request.headers || {}
     }
     body = unsigned ? { hash: PAYLOAD_UNSIGNED } : body
     request = { ...request, url, body }

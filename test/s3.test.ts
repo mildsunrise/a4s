@@ -64,7 +64,8 @@ describe('S3 signing', () => {
             expect(request2).toStrictEqual(request)
             expect(headers1).toStrictEqual({
                 'x-amz-date': '20190901T084743Z',
-                authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=7f7e4fb707ee43d80f2bc8f69e41a6ac4105991a7f1f665dc70d3828612e0391'
+                'x-aMz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
+                authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=eda582f20596370ec5f7c78a791692eae11d35df4bb1bc35cbe1a3b4a92cc977'
             })
 
             const headers2 = signS3Request(credentials, request2, { set: true })
@@ -75,10 +76,10 @@ describe('S3 signing', () => {
                     pathname: '/folder A',
                 },
                 headers: {
-                    'x-aMz-content-sha256': 'overriden',
+                    'x-aMz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
                     'foo': 'bar',
                     'x-amz-date': '20190901T084743Z',
-                    authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=7f7e4fb707ee43d80f2bc8f69e41a6ac4105991a7f1f665dc70d3828612e0391'
+                    authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=eda582f20596370ec5f7c78a791692eae11d35df4bb1bc35cbe1a3b4a92cc977'
                 }
             })
         })
