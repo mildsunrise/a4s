@@ -1,6 +1,7 @@
 import { URLSearchParams, URL } from 'url'
 import { formatHost, parseHost, DEFAULT_REGION } from '../src/util/endpoint'
 import { toURL, getHeader, toRequestOptions } from '../src/util/request'
+import crc32 from '../src/util/crc32'
 
 describe('request utilities', () => {
     it('getHeader works correctly', () => {
@@ -151,5 +152,11 @@ describe('endpoint utilities', () => {
             .toStrictEqual({ serviceName: 'ses', regionName: 'eu-west-1' })
         expect(formatHost('ses', 'eu-west-1'))
             .toStrictEqual('email.eu-west-1.amazonaws.com')
+    })
+})
+
+describe('CRC32', () => {
+    it('simple test', () => {
+        expect(crc32(Buffer.from('hello'))).toBe(0x3610A686)
     })
 })
