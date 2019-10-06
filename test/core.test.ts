@@ -1,4 +1,4 @@
-import { formatTimestamp, formatDate, getSigningData, signDigest, sign } from '../src/core'
+import { formatTimestamp, formatDate, getSigningData, signDigest } from '../src/core'
 
 import * as crypto from 'crypto'
 const hmac = jest.spyOn((crypto as any).Hmac.prototype, 'digest')
@@ -66,23 +66,6 @@ describe('Core signing', () => {
                 key: Buffer.from('674f7e8745f37c14fe188810745a0c54d78824d747e69eb74396c369ae5f7b4d', 'hex')
             },
         ).toString('hex')).toBe('f32bf1ce9850de71499f36962e445aba4ef65870af1688974b4f4426f685aac3')
-    })
-
-    it('sign(...) works correctly', () => {
-        const { signature, credential } = sign(
-            {
-                accessKey: 'testkey',
-                secretKey: 'test',
-                serviceName: 'service',
-                regionName: 'eu-west-3',
-            },
-            'ALG',
-            '2e1cf7ed91881a30569e46552437e4156c823447bf1781b921b5d486c568dd1c',
-            '20310430T201613Z',
-            { getSigningData: getSigningData.makeSimpleCache() }
-        )
-        expect(signature.toString('hex')).toBe('f32bf1ce9850de71499f36962e445aba4ef65870af1688974b4f4426f685aac3')
-        expect(credential).toBe('testkey/20310430/eu-west-3/service/aws4_request')
     })
 
 })
