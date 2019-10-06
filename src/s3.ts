@@ -10,7 +10,7 @@
 
 import { URLSearchParams, URL } from 'url'
 
-import { formatTimestamp, getSigning, signString, MAIN_ALGORITHM,
+import { formatTimestamp, getSigning, signString, ALGORITHM,
     RelaxedCredentials, GetSigningData, SignOptions } from './core'
 import { signRequest, SignHTTPOptions, CanonicalOptions, SignedRequest } from './http'
 import { DEFAULT_REGION } from './util/endpoint'
@@ -158,7 +158,7 @@ export function signS3Policy(
     const { signing, credential } = getSigning(timestamp, cr, options)
     const fields: {[key: string]: string} = {
         'x-amz-date': timestamp,
-        'x-amz-algorithm': MAIN_ALGORITHM,
+        'x-amz-algorithm': ALGORITHM,
         'x-amz-credential': credential,
     }
 

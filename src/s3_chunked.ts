@@ -10,7 +10,7 @@
 import { createHash } from 'crypto'
 import { Transform } from 'stream'
 
-import { formatTimestamp, getSigningData, signDigest, RelaxedCredentials, SignOptions, SigningData } from './core'
+import { formatTimestamp, getSigningData, signChunk, RelaxedCredentials, SignOptions } from './core'
 import { SignHTTPOptions, CanonicalOptions, parseAuthorization, hashBody } from './http'
 import { signS3Request, SignedS3Request } from './s3'
 import { getHeader } from './util/request'
@@ -20,8 +20,6 @@ export const PAYLOAD_STREAMING = 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD'
 
 /** Minimum length for chunks in payload streaming, 8KB */
 export const CHUNK_MIN = 8 * 1024
-/** Algorithm used for chunk signatures in payload streaming */
-export const ALGORITHM_STREAMING = 'AWS4-HMAC-SHA256-PAYLOAD'
 
 export interface ChunkDescription {
     hash: string
@@ -55,29 +53,6 @@ function patchHeaders(
         (request.headers = request.headers || {}) : { ...request.headers }
     Object.keys(extra).forEach(k => { headers[k] = extra[k] })
     return headers
-}
-
-/**
- * Low-level function that calculates the signature for a chunk of
- * data. Most users should use [[createS3PayloadSigner]] or
- * [[signS3ChunkedRequest]].
- * 
- * @param lastSignature Signature from previous chunk (or HTTP
- * request if this is the first chunk)
- * @param signing Signing data
- * @param timestamp Timestamp used for signing
- * @param chunk Chunk to calculate hash of (alternatively you may
- *              calculate it yourself and pass it as `{ hash: '<hex>' }`)
- * @returns Signature for the chunk
- */
-export function signS3Chunk(
-    lastSignature: string,
-    signing: SigningData,
-    timestamp: string,
-    chunk?: Buffer | { hash: string },
-) {
-    const digest = [lastSignature, EMPTY_HASH, hashBody(chunk)].join('\n')
-    return signDigest(ALGORITHM_STREAMING, digest, timestamp, signing).toString('hex')
 }
 
 /**
@@ -169,7 +144,8 @@ export function signS3ChunkedRequest(
         if ((chunk ? chunk.length : 0) !== length) {
             throw new Error(`Unexpected chunk size (got ${chunk && chunk.length}, expected ${length})`)
         }
-        signature = signS3Chunk(signature, signing, timestamp!, chunk)
+        signature = signChunk(signature, EMPTY_HASH, hashBody(chunk),
+            timestamp!, signing).toString('hex')
         dataCount += length
         done = !length
         return (dataCount === length ? '' : CRLF) +

@@ -3,7 +3,7 @@
  * 
  * This module contains only common signing logic (i.e. not HTTP specific);
  * main functions are [[formatTimestamp]] to generate timestamps, [[getSigning]]
- * to derive the signing key, and [[signDigest]] to sign a hash.
+ * to derive the signing key, and [[signDigest]] or [[signChunk]] to sign a hash.
  */
 /** */
 
@@ -112,21 +112,44 @@ export function formatTimestamp(date?: Date) {
 export const signString = (key: Buffer, sts: string | Buffer) =>
     createHmac('sha256', key).update(sts).digest()
 
-/** Main algorithm ID */
-export const MAIN_ALGORITHM = 'AWS4-HMAC-SHA256'
+/** Main algorithm ID, used by [[signDigest]] */
+export const ALGORITHM = 'AWS4-HMAC-SHA256'
 
 /**
- * Construct a standard payload digest string,
- * and sign it with {{signString}} (low-level)
+ * Construct a standard payload digest string, and sign it with {{signString}}
  *
- * @param algorithm Algorithm used for calculating `payloadDigest`, i.e. `AWS4-HMAC-SHA256`
- * @param payloadDigest The payload digest (typically a hex-encoded hash)
+ * @param payloadDigest The payload digest (typically a hex-encoded SHA-256 hash)
  * @param timestamp Timestamp used in the request
  * @param signing The signing data obtained from [[getSigningData]] pr [[getSigning]] (its date should match `timestamp`)
+ * @param algorithm Algorithm used for calculating `payloadDigest`, defaults to [[ALGORITHM]]
  * @returns The binary signature
  * @category Signing
  */
-export const signDigest = (algorithm: string, payloadDigest: string,
-                           timestamp: string, signing: SigningData) =>
+export const signDigest = (payloadDigest: string, timestamp: string,
+        signing: SigningData, algorithm: string = ALGORITHM) =>
     signString(signing.key,
         [algorithm, timestamp, signing.scope, payloadDigest].join('\n'))
+
+/** Chunk algorithm ID, used by [[signChunk]] */
+export const ALGORITHM_CHUNK = 'AWS4-HMAC-SHA256-PAYLOAD'
+
+/**
+ * Variant of [[signDigest]] where the last signature and
+ * an auxiliar digest is also included. Typically used to sign
+ * the payload by chunks.
+ *
+ * @param lastSignature The last signature, hex-encoded. If this is the first
+ *     chunk, pass the initial request signature (seed signature).
+ * @param headersDigest The current headers digest (typically a hex-encoded SHA-256 hash)
+ * @param payloadDigest The current payload digest (typically a hex-encoded SHA-256 hash)
+ * @param timestamp Timestamp used in the request
+ * @param signing The signing data obtained from [[getSigningData]] pr [[getSigning]] (its date should match `timestamp`)
+ * @param algorithm Algorithm used for calculating `payloadDigest`, defaults to [[ALGORITHM_CHUNK]]
+ * @returns The binary signature
+ * @category Chunk signing
+ */
+export const signChunk = (lastSignature: string, headersDigest: string,
+        payloadDigest: string, timestamp: string, signing: SigningData,
+        algorithm: string = ALGORITHM_CHUNK) =>
+    signDigest([lastSignature, headersDigest, payloadDigest].join('\n'),
+        timestamp, signing, algorithm)

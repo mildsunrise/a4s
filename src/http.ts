@@ -13,7 +13,7 @@ import { unescape } from 'querystring'
 import { createHash } from 'crypto'
 import { OutgoingHttpHeaders } from 'http'
 
-import { formatTimestamp, getSigning, signDigest, MAIN_ALGORITHM, RelaxedCredentials, Credentials, SignOptions } from './core'
+import { formatTimestamp, getSigning, signDigest, ALGORITHM, RelaxedCredentials, Credentials, SignOptions } from './core'
 import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
 import { getHeader } from './util/request'
 
@@ -306,7 +306,7 @@ export function signRequestRaw(
     }
     const cheaders = getCanonicalHeaders(headers)
     if (isQuery) {
-        result['X-Amz-Algorithm'] = MAIN_ALGORITHM
+        result['X-Amz-Algorithm'] = ALGORITHM
         result['X-Amz-Credential'] = credential
         result['X-Amz-SignedHeaders'] = cheaders[1]
         query = new URLSearchParams(query)
@@ -317,12 +317,12 @@ export function signRequestRaw(
     // Construct canonical request, digest, and sign
     const creq = getCanonical(method, pathname, query, cheaders, { hash }, options)
     const digest = createHash('sha256').update(creq).digest('hex')
-    const signature = signDigest(MAIN_ALGORITHM, digest, timestamp, signing)
+    const signature = signDigest(digest, timestamp, signing)
 
     // Add final parameter
     result[parameter] = isQuery? signature.toString('hex') :
         buildAuthorization({ signature, credential,
-            algorithm: MAIN_ALGORITHM, signedHeaders: cheaders[1] })
+            algorithm: ALGORITHM, signedHeaders: cheaders[1] })
     return result
 }
 

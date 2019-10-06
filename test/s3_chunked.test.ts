@@ -2,7 +2,7 @@ import { promisify } from 'util'
 import * as stream from 'stream'
 import { getSigningData } from '../src/core'
 import { SignedS3Request } from '../src/s3'
-import { createS3PayloadSigner, signS3ChunkedRequest, signS3Chunk, CHUNK_MIN } from '../src/s3_chunked'
+import { createS3PayloadSigner, signS3ChunkedRequest, CHUNK_MIN } from '../src/s3_chunked'
 const finished = promisify(stream.finished)
 
 const oDate = Date
@@ -15,15 +15,6 @@ describe('S3 Authorization-based Chunked Upload', () => {
         accessKey: 'AKIAIOSFODNN7EXAMPLE',
         secretKey: 'wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY',
     }
-
-    it('signChunk() test', () => {
-        const timestamp = '20130524T000000Z'
-        const signing = getSigningData(timestamp, credentials.secretKey, 'us-east-1', 's3')
-        const lastSignature = '4f232c4386841ef735655705268965c44a0e4690baa4adea153f7db9fa80a0a9'
-        const hash = 'bf718b6f653bebc184e1479f1935b8da974d701b893afcf49e701f3e2f9f9c5a'
-        expect(signS3Chunk(lastSignature, signing, timestamp, { hash }))
-            .toBe('ad80c730a21e5b8d04586a2213dd63b9a0e99e0e2307b0ade35a65485a288648')
-    })
 
     it('full test (includes incomplete chunk)', async () => {
         const payload1 = Buffer.alloc(25 * 1024, 'a')
