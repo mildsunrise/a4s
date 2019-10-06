@@ -82,13 +82,13 @@ function patchURL(
  * @param credentials Credentials to sign the request with
  * @param request HTTP request to sign, see [[SignedS3Request]]
  * @param options Other options
- * @returns Authorization headers / query parameters
+ * @returns Authorization headers / query parameters, and other info
  */
 export function signS3Request(
    credentials: RelaxedCredentials,
    request: SignedS3Request,
    options?: SignHTTPOptions & CanonicalOptions & SignOptions
-): {[key: string]: string} {
+) {
     const isQuery = options && options.query
     let { url, body, unsigned } = { unsigned: isQuery, ...request }
     url = typeof url === 'string' ? new URL(url) : url
@@ -109,8 +109,8 @@ export function signS3Request(
     if (typeof request.url !== 'string' && !request.url.host) {
         credentials = { serviceName: 's3', ...credentials }
     }
-    const result = { ...extra, ...signRequest(
-        credentials, request, { ...S3_OPTIONS, ...options }) }
+    const result = signRequest(credentials, request, { ...S3_OPTIONS, ...options })
+    result.params = { ...extra, ...result.params }
     if (options && options.set && isQuery &&
         typeof originalRequest.url === 'string') {
         originalRequest.url = (url as URL).toString()

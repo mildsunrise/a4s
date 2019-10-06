@@ -122,7 +122,7 @@ describe('HTTP signing', () => {
             const newHeaders = signRequest(
                 { ...credentials, serviceName: 'ec2', regionName: 'us-east-1' },
                 request2
-            )
+            ).params
             expect(request1).toStrictEqual(request2)
             expect(newHeaders.authorization).toBe('AWS4-HMAC-SHA256 Credential=access_test/20190830/us-east-1/ec2/aws4_request, SignedHeaders=host;x-amz-date, Signature=afc0e2557e1c0bc4d8cb15aaf8df57d862fda39caa9cc574215f10987816710c')
         })
@@ -137,7 +137,7 @@ describe('HTTP signing', () => {
                 { ...credentials, serviceName: 'ec2', regionName: 'us-east-1' },
                 request2,
                 { query: true }
-            )
+            ).params
             expect(request1).toStrictEqual(request2)
             expect(query).toStrictEqual({
                 'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
@@ -156,7 +156,7 @@ describe('HTTP signing', () => {
                 { ...credentials, serviceName: 'ec2', regionName: 'us-east-1' },
                 request,
                 { query: true, set: true }
-            )
+            ).params
             expect(query).toStrictEqual({
                 'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
                 'X-Amz-Credential': 'access_test/20190830/us-east-1/ec2/aws4_request',
@@ -182,7 +182,7 @@ describe('HTTP signing', () => {
                 { ...credentials, serviceName: 'ec2', regionName: 'us-east-1' },
                 request,
                 { query: true, set: true }
-            )
+            ).params
             expect(query).toStrictEqual({
                 'X-Amz-Algorithm': 'AWS4-HMAC-SHA256',
                 'X-Amz-Credential': 'access_test/20190831/us-east-1/ec2/aws4_request',
@@ -253,7 +253,7 @@ describe('HTTP signing', () => {
                     },
                     body: '{"KeySchema": [{"KeyType": "HASH","AttributeName": "Id"}],"TableName": "TestTable","AttributeDefinitions": [{"AttributeName": "Id","AttributeType": "S"}],"ProvisionedThroughput": {"WriteCapacityUnits": 5,"ReadCapacityUnits": 5}}',
                 }
-            )
+            ).params
             expect(result.authorization).toBe('AWS4-HMAC-SHA256 Credential=access_test/20190830/us-west-2/dynamodb/aws4_request, SignedHeaders=content-type;host;x-amz-date;x-amz-target, Signature=c34b85b7c550eaa329ac72987fb54d77889c5f85e9bf1df213e1ae8db2d5402c')
         })
 
@@ -266,7 +266,7 @@ describe('HTTP signing', () => {
                     url: 'https://ec2.amazonaws.com?Action=DescribeRegions&Version=2013-10-15',
                 },
                 { query: true }
-            )
+            ).params
             expect(date).toHaveBeenCalledTimes(1)
             expect(query).toStrictEqual({
                 'X-Amz-Date': '20190831T201224Z',
@@ -300,7 +300,7 @@ describe('HTTP signing', () => {
                     url: 'https://ec2.amazonaws.com?Action=DescribeRegions&Version=2013-10-15',
                 },
                 {}
-            )
+            ).params
             expect(date).toHaveBeenCalledTimes(1)
             expect(headers).toStrictEqual({
                 'x-amz-date': '20190831T201224Z',

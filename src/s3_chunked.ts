@@ -10,8 +10,8 @@
 import { createHash } from 'crypto'
 import { Transform } from 'stream'
 
-import { formatTimestamp, getSigningData, signChunk, RelaxedCredentials, SignOptions } from './core'
-import { SignHTTPOptions, CanonicalOptions, parseAuthorization, hashBody } from './http'
+import { signChunk, RelaxedCredentials, SignOptions } from './core'
+import { SignHTTPOptions, CanonicalOptions, hashBody, SignResult } from './http'
 import { signS3Request, SignedS3Request } from './s3'
 import { getHeader } from './util/request'
 
@@ -79,8 +79,8 @@ function patchHeaders(
  * @param bodyLength Length of the payload you want to send
  * @param chunkLength Length of each data chunk (must be at least CHUNK_MIN)
  * @param options Other options (`query` is ignored)
- * @returns Object containing authorization parameters,
- * and the chunk signer function.
+ * @returns Same as [[signS3Request]] with an additional `signer`
+ * property containing the chunk signer function.
  */
 export function signS3ChunkedRequest(
     credentials: RelaxedCredentials,
@@ -88,10 +88,10 @@ export function signS3ChunkedRequest(
     bodyLength: number,
     chunkLength: number,
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
-): { parameters: {[key: string]: string | number}, signer: ChunkSigner } {
+): SignResult & { signer: ChunkSigner } {
     const originalRequest = request
     let { headers } = request
-    const extra: {[key: string]: string | number} = {}
+    const extra: {[key: string]: string} = {}
 
     // Calculate total length (body + metadata)
     const { chunks, lastLength } = calculateChunks(bodyLength, chunkLength)
@@ -107,28 +107,19 @@ export function signS3ChunkedRequest(
     if (!(encoding && /^\s*aws-chunked\s*($|,)/i.test(encoding))) {
         extra[encodingName] = 'aws-chunked' + (encoding ? `,${encoding}` : '')
     }
-    let timestamp = getHeader(headers, 'x-amz-date')[1]
-    if (!timestamp) {
-        timestamp = extra['x-amz-date'] = formatTimestamp()
-    }
-    extra['content-length'] = totalLength
-    extra['x-amz-decoded-content-length'] = bodyLength
+    extra[getHeader(headers, 'content-length')[0]] = `${totalLength}`
+    extra['x-amz-decoded-content-length'] = `${bodyLength}`
 
     // Sign the request
     headers = patchHeaders(request, extra, options && options.set)
     request = { ...request, headers, body: { hash: PAYLOAD_STREAMING } }
-    const parameters = { ...extra, ...signS3Request(
-        credentials, request, { ...options, query: false }) }
+    const result = signS3Request(
+        credentials, request, { ...options, query: false })
+    result.params = { ...extra, ...result.params }
     originalRequest.url = request.url
 
-    // Derive key used by signRequest
-    const auth = parseAuthorization(parameters.authorization as string)
-    const [ regionName, serviceName ] = auth.credential.split('/').slice(2, 4)
-    const derive = (options && options.getSigningData) || getSigningData
-    const signing = derive(timestamp, credentials.secretKey, regionName, serviceName)
-
     // Chunk signer implementation
-    let signature = auth.signature.toString('hex')
+    let signature = result.signature.toString('hex')
     let dataCount = 0
     let done = false
 
@@ -145,14 +136,14 @@ export function signS3ChunkedRequest(
             throw new Error(`Unexpected chunk size (got ${chunk && chunk.length}, expected ${length})`)
         }
         signature = signChunk(signature, EMPTY_HASH, hashBody(chunk),
-            timestamp!, signing).toString('hex')
+            result.timestamp, result.signing).toString('hex')
         dataCount += length
         done = !length
         return (dataCount === length ? '' : CRLF) +
             header + signature + CRLF + (length ? '' : CRLF)
     }
 
-    return { parameters, signer }
+    return { ...result, signer }
 }
 
 /**
@@ -170,8 +161,8 @@ export function signS3ChunkedRequest(
  * @param bodyLength Length of the payload you want to send
  * @param chunkLength Length of each data chunk (must be at least CHUNK_MIN)
  * @param options Other options (`query` is ignored)
- * @returns Object containing authorization parameters,
- * and the signing transform stream.
+ * @returns Same as [[signS3Request]] with an additional `signer`
+ * property containing the signing transform stream.
  */
 export function createS3PayloadSigner(
     credentials: RelaxedCredentials,
@@ -179,8 +170,8 @@ export function createS3PayloadSigner(
     bodyLength: number,
     chunkLength: number,
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
-): { parameters: {[key: string]: string | number}, signer: Transform } {
-    const { parameters, signer } = signS3ChunkedRequest(
+): SignResult & { signer: Transform } {
+    const { signer, ...result } = signS3ChunkedRequest(
         credentials, request, bodyLength, chunkLength, options)
 
     let pending: Buffer[] = [], length = 0, hash = createHash('sha256')
@@ -212,5 +203,5 @@ export function createS3PayloadSigner(
             callback()
         },
     })
-    return { parameters, signer: stream }
+    return { ...result, signer: stream }
 }

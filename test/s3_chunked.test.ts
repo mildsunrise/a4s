@@ -29,16 +29,16 @@ describe('S3 Authorization-based Chunked Upload', () => {
                 'Content-Encoding': 'gzip',
             }
         }
-        const { parameters, signer } = createS3PayloadSigner(
+        const { params, signer } = createS3PayloadSigner(
             credentials, request, payload1.length + payload2.length, chunkSize, { set: true })
         
-        expect(parameters).toStrictEqual({
+        expect(params).toStrictEqual({
             'x-amz-date': '20190901T084743Z',
             'authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=content-encoding;content-length;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-storage-class, Signature=005ebbfad3a209227c1c8b72f89ab7658a27000ef7ce9a05f5ab02c2652c41e1',
             'x-amz-content-sha256': 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD',
             'Content-Encoding': 'aws-chunked,gzip',
-            'x-amz-decoded-content-length': 66560,
-            'content-length': 66824,
+            'x-amz-decoded-content-length': '66560',
+            'content-length': '66824',
         })
         expect(request.headers).toStrictEqual({
             'x-amz-date': '20190901T084743Z',
@@ -46,8 +46,8 @@ describe('S3 Authorization-based Chunked Upload', () => {
             'authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=content-encoding;content-length;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-storage-class, Signature=005ebbfad3a209227c1c8b72f89ab7658a27000ef7ce9a05f5ab02c2652c41e1',
             'x-amz-content-sha256': 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD',
             'Content-Encoding': 'aws-chunked,gzip',
-            'x-amz-decoded-content-length': 66560,
-            'content-length': 66824,
+            'x-amz-decoded-content-length': '66560',
+            'content-length': '66824',
         })
         
         const chunks: Buffer[] = []
@@ -71,7 +71,7 @@ describe('S3 Authorization-based Chunked Upload', () => {
         expect(chunks[1]).toBe(payload1)
 
         expect(Buffer.concat(chunks).length)
-            .toBe(request.headers!['content-length'])
+            .toBe(Number(request.headers!['content-length']))
     })
 
     it("doesn't touch content-encoding if already set correctly", () => {
@@ -83,15 +83,15 @@ describe('S3 Authorization-based Chunked Upload', () => {
                 'Content-Encoding': '   aws-chunked ,gzip',
             }
         }
-        const { parameters, signer } = createS3PayloadSigner(
+        const { params, signer } = createS3PayloadSigner(
             credentials, request, 65 * 1024, 64 * 1024, { set: true })
         
-        expect(parameters).toStrictEqual({
+        expect(params).toStrictEqual({
             'x-amz-date': '20190901T084743Z',
             'authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=content-encoding;content-length;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-storage-class, Signature=857b1490b454d085e50983821e53811a488e8b5181608a3d870f0e13fc17edc0',
             'x-amz-content-sha256': 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD',
-            'x-amz-decoded-content-length': 66560,
-            'content-length': 66824,
+            'x-amz-decoded-content-length': '66560',
+            'content-length': '66824',
         })
         expect(request.headers).toStrictEqual({
             'x-amz-date': '20190901T084743Z',
@@ -99,8 +99,8 @@ describe('S3 Authorization-based Chunked Upload', () => {
             'authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=content-encoding;content-length;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length;x-amz-storage-class, Signature=857b1490b454d085e50983821e53811a488e8b5181608a3d870f0e13fc17edc0',
             'x-amz-content-sha256': 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD',
             'Content-Encoding': '   aws-chunked ,gzip',
-            'x-amz-decoded-content-length': 66560,
-            'content-length': 66824,
+            'x-amz-decoded-content-length': '66560',
+            'content-length': '66824',
         })
     })
 
@@ -109,16 +109,16 @@ describe('S3 Authorization-based Chunked Upload', () => {
             method: 'PUT',
             url: 'https://s3.amazonaws.com/examplebucket/chunkObject.txt',
         }
-        const { parameters, signer } = signS3ChunkedRequest(
+        const { params, signer } = signS3ChunkedRequest(
             credentials, request, 65 * 1024, 64 * 1024, { set: true })
-        expect(request.headers).toStrictEqual(parameters)
-        expect(parameters).toStrictEqual({
+        expect(request.headers).toStrictEqual(params)
+        expect(params).toStrictEqual({
             'x-amz-date': '20190901T084743Z',
             'authorization': 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=content-encoding;content-length;host;x-amz-content-sha256;x-amz-date;x-amz-decoded-content-length, Signature=89284808e144b475bc79365ea4646bb82af4186cc2c6f15bd094e06b8d27f71b',
             'x-amz-content-sha256': 'STREAMING-AWS4-HMAC-SHA256-PAYLOAD',
             'content-encoding': 'aws-chunked',
-            'x-amz-decoded-content-length': 66560,
-            'content-length': 66824,
+            'x-amz-decoded-content-length': '66560',
+            'content-length': '66824',
         })
 
         expect(() => signer()).toThrow()
@@ -174,14 +174,14 @@ describe('S3 Authorization-based Chunked Upload', () => {
         expect(request).toStrictEqual(request2)
         
         async function test(payload: Buffer) {
-            const { signer, parameters } = createS3PayloadSigner(credentials,
+            const { signer, params } = createS3PayloadSigner(credentials,
                 request, payload.length, 8 * 1024)
             expect(request).toStrictEqual(request2)
             const chunks: Buffer[] = []
             const done = finished(signer)
             signer.on('data', data => chunks.push(data)).end(payload)
             await done
-            expect(Buffer.concat(chunks).length).toBe(parameters['content-length'])
+            expect(Buffer.concat(chunks).length).toBe(Number(params['content-length']))
             return chunks
         }
         expect(await test(Buffer.alloc(0 * 1024, 'a'))).toStrictEqual([

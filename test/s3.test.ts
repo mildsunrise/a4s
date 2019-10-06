@@ -18,7 +18,7 @@ describe('S3 signing', () => {
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder A?list-type=2',
             }
             const request2: SignedS3Request = { ...request }
-            const headers1 = signS3Request(credentials, request2)
+            const headers1 = signS3Request(credentials, request2).params
             expect(request2).toStrictEqual(request)
             expect(headers1).toStrictEqual({
                 'x-amz-content-sha256': 'e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855',
@@ -26,7 +26,7 @@ describe('S3 signing', () => {
                 authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=host;x-amz-content-sha256;x-amz-date, Signature=26e0ce918d316644d24ede2e351ed6b727ce2740527721c5631a494629f54bfb'
             })
 
-            const headers2 = signS3Request(credentials, request2, { set: true })
+            const headers2 = signS3Request(credentials, request2, { set: true }).params
             expect(headers1).toStrictEqual(headers2)
             expect(request2).toStrictEqual({
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder A?list-type=2',
@@ -39,10 +39,10 @@ describe('S3 signing', () => {
 
             // signing request again should produce same result
             const request3 = { url: request2.url, headers: { ...request2.headers } }
-            const headers3 = signS3Request(credentials, request3)
+            const headers3 = signS3Request(credentials, request3).params
             expect(request3).toStrictEqual(request2)
             expect({ ...headers2, ...headers3 }).toStrictEqual(headers2) // headers3 must be subset of headers2
-            const headers4 = signS3Request(credentials, request3, { set: true })
+            const headers4 = signS3Request(credentials, request3, { set: true }).params
             expect(request3).toStrictEqual(request2)
             expect(headers4).toStrictEqual(headers3)
         })
@@ -58,7 +58,7 @@ describe('S3 signing', () => {
                 }
             })
             const request = requestbuilder(), request2 = requestbuilder()
-            const headers1 = signS3Request(credentials, request2)
+            const headers1 = signS3Request(credentials, request2).params
             expect((request2.url as any).host).toBe('s3.amazonaws.com')
             delete (request2.url as any).host
             expect(request2).toStrictEqual(request)
@@ -68,7 +68,7 @@ describe('S3 signing', () => {
                 authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=eda582f20596370ec5f7c78a791692eae11d35df4bb1bc35cbe1a3b4a92cc977'
             })
 
-            const headers2 = signS3Request(credentials, request2, { set: true })
+            const headers2 = signS3Request(credentials, request2, { set: true }).params
             expect(headers1).toStrictEqual(headers2)
             expect(request2).toStrictEqual({
                 url: {
@@ -98,7 +98,7 @@ describe('S3 signing', () => {
                 unsigned: true,
             })
             const request = requestbuilder(), request2 = requestbuilder()
-            const headers1 = signS3Request(credentials, request2)
+            const headers1 = signS3Request(credentials, request2).params
             expect(request2).toStrictEqual(request)
             expect(headers1).toStrictEqual({
                 'x-amz-date': '20190901T084743Z',
@@ -106,7 +106,7 @@ describe('S3 signing', () => {
                 authorization: 'AWS4-HMAC-SHA256 Credential=AKIAIOSFODNN7EXAMPLE/20190901/us-east-1/s3/aws4_request, SignedHeaders=foo;host;x-amz-content-sha256;x-amz-date, Signature=9368eeb2de103f930a23fbbedd6a937077a63683a92566e561101aead1a51996'
             })
 
-            const headers2 = signS3Request(credentials, request2, { set: true })
+            const headers2 = signS3Request(credentials, request2, { set: true }).params
             expect(headers1).toStrictEqual(headers2)
             expect(request2).toStrictEqual({
                 url: {
@@ -138,7 +138,7 @@ describe('S3 signing', () => {
                 body: 'should be ignored',
             }
             const request2 = { ...request }
-            const query1 = signS3Request(credentials, request2, { query: true })
+            const query1 = signS3Request(credentials, request2, { query: true }).params
             expect(request2).toStrictEqual(request)
             expect(query1).toStrictEqual({
                 'X-Amz-Expires': '604800',
@@ -149,7 +149,7 @@ describe('S3 signing', () => {
                 'X-Amz-Signature': '2a90f4809bc072d7e58b670b7888dbb932f405f355169ebb9fba2dd27f939153'
             })
 
-            const query2 = signS3Request(credentials, request2, { query: true, set: true })
+            const query2 = signS3Request(credentials, request2, { query: true, set: true }).params
             expect(query1).toStrictEqual(query2)
             expect(request2).toStrictEqual({
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder%20A?list-type=2&X-Amz-Expires=604800&X-Amz-Date=20190901T084743Z&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20190901%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=2a90f4809bc072d7e58b670b7888dbb932f405f355169ebb9fba2dd27f939153',
@@ -158,10 +158,10 @@ describe('S3 signing', () => {
 
             // signing request again should produce same result
             const request3 = { ...request2 }
-            const query3 = signS3Request(credentials, request3, { query: true })
+            const query3 = signS3Request(credentials, request3, { query: true }).params
             expect(request3).toStrictEqual(request2)
             expect({ ...query2, ...query3 }).toStrictEqual(query2) // query3 must be subset of query2
-            const query4 = signS3Request(credentials, request3, { query: true, set: true })
+            const query4 = signS3Request(credentials, request3, { query: true, set: true }).params
             expect(request3).toStrictEqual(request2)
             expect(query4).toStrictEqual(query3)
         })
@@ -171,7 +171,7 @@ describe('S3 signing', () => {
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder A?list-type=2&X-Amz-Expires=2000',
             }
             const request2 = { ...request }
-            const query1 = signS3Request(credentials, request2, { query: true })
+            const query1 = signS3Request(credentials, request2, { query: true }).params
             expect(request2).toStrictEqual(request)
             expect(query1).toStrictEqual({
                 'X-Amz-Date': '20190901T084743Z',
@@ -181,7 +181,7 @@ describe('S3 signing', () => {
                 'X-Amz-Signature': '97f953c9a545dbe43e3d16425aba8f52c764ba72e22d6cda563fddb8b549b95c'
             })
 
-            const query2 = signS3Request(credentials, request2, { query: true, set: true })
+            const query2 = signS3Request(credentials, request2, { query: true, set: true }).params
             expect(query1).toStrictEqual(query2)
             expect(request2).toStrictEqual({
                 url: 'https://examplebucket.s3.amazonaws.com/root//folder%20A?list-type=2&X-Amz-Expires=2000&X-Amz-Date=20190901T084743Z&X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=AKIAIOSFODNN7EXAMPLE%2F20190901%2Fus-east-1%2Fs3%2Faws4_request&X-Amz-SignedHeaders=host&X-Amz-Signature=97f953c9a545dbe43e3d16425aba8f52c764ba72e22d6cda563fddb8b549b95c'
@@ -196,7 +196,7 @@ describe('S3 signing', () => {
                 },
             })
             const request = requestbuilder(), request2 = requestbuilder()
-            const query1 = signS3Request(credentials, request2, { query: true })
+            const query1 = signS3Request(credentials, request2, { query: true }).params
             expect((request2.url as any).host).toBe('s3.amazonaws.com')
             delete (request2.url as any).host
             expect(request2).toStrictEqual(request)
@@ -209,7 +209,7 @@ describe('S3 signing', () => {
                 'X-Amz-Signature': '92086108c9882d5cf2797746769d7c3ab1bfeb569af3f4aa922a15368f06d84b'
             })
 
-            const query2 = signS3Request(credentials, request2, { query: true, set: true })
+            const query2 = signS3Request(credentials, request2, { query: true, set: true }).params
             expect(query1).toStrictEqual(query2)
             expect((request2.url as any).host).toBe('s3.amazonaws.com')
             expect((request2.url.pathname)).toBe(request.url.pathname)
@@ -229,7 +229,7 @@ describe('S3 signing', () => {
                 }
             })
             const request = requestbuilder(), request2 = requestbuilder()
-            const query1 = signS3Request(credentials, request2, { query: true })
+            const query1 = signS3Request(credentials, request2, { query: true }).params
             expect(request2).toStrictEqual(request)
             expect(query1).toStrictEqual({
                 'X-Amz-Expires': '604800',
@@ -240,7 +240,7 @@ describe('S3 signing', () => {
                 'X-Amz-Signature': '536f36e0569f06f251ed8efc9393d7871d5fbf47d3671fbec16b987ebb05414f'
             })
 
-            const query2 = signS3Request(credentials, request2, { query: true, set: true })
+            const query2 = signS3Request(credentials, request2, { query: true, set: true }).params
             expect(query1).toStrictEqual(query2)
             expect(request2).toStrictEqual({
                 url: {

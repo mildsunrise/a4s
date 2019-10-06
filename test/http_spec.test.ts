@@ -64,12 +64,12 @@ describe('SDK spec, HTTP signing', () => {
         it('can accept an options object', function() {
             let options: object = { no: true }
             const request = buildRequest()
-            const result = signRequest(fullCreds, request, options)
+            const result = signRequest(fullCreds, request, options).params
             expect(result.authorization).toBe(authorization)
         })
         it('should generate proper signature', function() {
             const request = buildRequest()
-            const result = signRequest(fullCreds, request)
+            const result = signRequest(fullCreds, request).params
             expect(result.authorization).toBe(authorization)
         })
         // it('should not compute SHA 256 checksum more than once')

@@ -41,7 +41,7 @@ describe('AWS test suite', () => {
             const headers2 = { ...input.headers }
             const query2 = new URLSearchParams(query)
             const result1 = signRequestRaw({ ...CREDENTIALS, regionName: 'us-east-1' },
-                input.method, pathname, query2, headers2, input.body)
+                input.method, pathname, query2, headers2, input.body).params
             expect(headers2).toStrictEqual(input.headers)
             expect(query2.toString()).toBe(new URLSearchParams(query).toString())
             expect(result1)
@@ -51,7 +51,7 @@ describe('AWS test suite', () => {
             const request = { ...input, url: `https://${host}${input.path}` }
             const request2 = JSON.parse(JSON.stringify(request))
             expect(request2).toStrictEqual(request)
-            const result2 = signRequest(CREDENTIALS, request2)
+            const result2 = signRequest(CREDENTIALS, request2).params
             expect(request2).toStrictEqual(request)
             expect(result2).toStrictEqual(result1)
         })

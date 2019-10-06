@@ -13,7 +13,7 @@ import { unescape } from 'querystring'
 import { createHash } from 'crypto'
 import { OutgoingHttpHeaders } from 'http'
 
-import { formatTimestamp, getSigning, signDigest, ALGORITHM, RelaxedCredentials, Credentials, SignOptions } from './core'
+import { formatTimestamp, getSigning, signDigest, ALGORITHM, RelaxedCredentials, Credentials, SignOptions, SigningData } from './core'
 import { parseHost, formatHost, DEFAULT_REGION } from './util/endpoint'
 import { getHeader } from './util/request'
 
@@ -57,6 +57,24 @@ export interface SignedRequest {
     /** Request body to calculate hash of (alternatively you may
      * calculate it yourself and pass it as `{ hash: '<hex>' }`) */
     body?: Buffer | string | { hash: string }
+}
+
+/**
+ * Returned by [[signRequestRaw]] and [[signRequest]]. Contains
+ * the generated authorization parameters (`params`) and other
+ * information (signature itself, derived key, credentials and timestamp).
+ */
+export interface SignResult {
+    /** Authorization parameters */
+    params: {[key: string]: string}
+    /** Signing credentials */
+    credentials: Credentials
+    /** Signing timestamp */
+    timestamp: string
+    /** Derived signing data */
+    signing: SigningData
+    /** Generated binary signature */
+    signature: Buffer
 }
 
 function escape(str: string) {
@@ -265,7 +283,7 @@ export function parseAuthorization(header: string) {
  * @param body Request body to calculate hash of (alternatively you may
  *             calculate it yourself and pass it as `{ hash: '<hex>' }`)
  * @param options Other options
- * @returns Authentication headers / query parameters
+ * @returns Authentication headers / query parameters, and other info
  * @category Signing
  */
 export function signRequestRaw(
@@ -276,9 +294,9 @@ export function signRequestRaw(
     headers: OutgoingHttpHeaders,
     body: SignedRequest["body"],
     options?: SignHTTPOptions & CanonicalOptions & SignOptions
-): {[key: string]: string} {
+): SignResult {
     const isQuery = options && options.query
-    const result: {[key: string]: string} = {}
+    const params: {[key: string]: string} = {}
     const parameter = isQuery ?
         'X-Amz-Signature' : getHeader(headers, 'authorization')[0]
 
@@ -287,13 +305,13 @@ export function signRequestRaw(
         query.get('X-Amz-Date') : getHeader(headers, 'x-amz-date')[1]
     if (!timestamp) {
         const name = isQuery ? 'X-Amz-Date' : 'x-amz-date'
-        timestamp = result[name] = formatTimestamp()
+        timestamp = params[name] = formatTimestamp()
     }
 
     // Calculate body hash
     const hash = hashBody(body)
     if (!isQuery && options && options.setContentHash) {
-        result[getHeader(headers, 'x-amz-content-sha256')[0]] = hash
+        params[getHeader(headers, 'x-amz-content-sha256')[0]] = hash
     }
 
     // Derive signing key
@@ -301,16 +319,16 @@ export function signRequestRaw(
 
     // Set other parameters if needed, delete final parameter
     if (!isQuery) {
-        headers = { ...headers, ...result }
+        headers = { ...headers, ...params }
         delete headers[parameter]
     }
     const cheaders = getCanonicalHeaders(headers)
     if (isQuery) {
-        result['X-Amz-Algorithm'] = ALGORITHM
-        result['X-Amz-Credential'] = credential
-        result['X-Amz-SignedHeaders'] = cheaders[1]
+        params['X-Amz-Algorithm'] = ALGORITHM
+        params['X-Amz-Credential'] = credential
+        params['X-Amz-SignedHeaders'] = cheaders[1]
         query = new URLSearchParams(query)
-        Object.keys(result).forEach(k => query.set(k, result[k]))
+        Object.keys(params).forEach(k => query.set(k, params[k]))
         query.delete(parameter)
     }
 
@@ -320,10 +338,10 @@ export function signRequestRaw(
     const signature = signDigest(digest, timestamp, signing)
 
     // Add final parameter
-    result[parameter] = isQuery? signature.toString('hex') :
+    params[parameter] = isQuery? signature.toString('hex') :
         buildAuthorization({ signature, credential,
             algorithm: ALGORITHM, signedHeaders: cheaders[1] })
-    return result
+    return { params, signature, signing, credentials, timestamp }
 }
 
 /**
@@ -355,7 +373,7 @@ export function signRequestRaw(
  * @param credentials Credentials to sign the request with
  * @param request HTTP request to sign, see [[SignedRequest]]
  * @param options Other options
- * @returns Authorization headers / query parameters
+ * @returns Authorization headers / query parameters, and other info
  * @throws If duplicate headers are passed (see note about headers)
  * @throws If neither `serviceName` nor `url.host` is passed, or if
  *         `url.host` can't be parsed to extract `serviceName`.
@@ -389,6 +407,7 @@ export function signRequest(
     const query = url.searchParams || new URLSearchParams()
     const result = signRequestRaw(credentials as Credentials, method || 'GET',
         url.pathname || '/', query, headers || {}, body, options)
+    const { params } = result
 
     // Set the parameters if required
     if (options && options.set) {
@@ -396,13 +415,13 @@ export function signRequest(
             if (!url.searchParams) {
                 url.searchParams = query
             }
-            Object.keys(result).forEach(k => query.set(k, result[k]))
+            Object.keys(params).forEach(k => query.set(k, params[k]))
             if (typeof request.url === 'string') {
                 request.url = (url as URL).toString()
             }
         } else {
             const rh = request.headers = request.headers || {}
-            Object.keys(result).forEach(k => { rh[k] = result[k] })
+            Object.keys(params).forEach(k => { rh[k] = params[k] })
         }
     }
 
