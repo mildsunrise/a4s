@@ -19,7 +19,10 @@ and service-specific implementations are provided (i.e. S3, Cloudfront, etc.).
    - Query signing (presigned URLs)
    - POST form authorization (signed policy)
 
-#### A note about headers
+ - [**`events`: Event Stream encoding**](https://a4s.alba.sh/docs/modules/_events_.html)
+   - [**`events_sign`: Event signing**](https://a4s.alba.sh/docs/modules/_events_sign_.html)
+
+#### A note about HTTP headers
 
 This library assumes there are no illegal characters in header names (i.e.
 whitespace) or values (i.e. control chars). If there are, Node.JS will fail
