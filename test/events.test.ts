@@ -43,11 +43,11 @@ describe('Event stream encoding', () => {
         `, 'base64')
         const data = Buffer.alloc(0)
         const rawHeaders: HeaderArray = [
-            [ ':date', { type: 'uint64', data: BigInt(1548726977291) } ],
+            [ ':date', { type: 'timestamp', data: new Date(1548726977291) } ],
             [ ':chunk-signature', { type: 'buffer', data: Buffer.from('ade99cbebb29b010ad92acba7fcd5048e5e1a7f378dd07009a45404903e79a0d', 'hex') } ],
         ]
         const headers: HeaderObject = {
-            ':date': { type: 'uint64', data: BigInt(1548726977291) },
+            ':date': { type: 'timestamp', data: new Date(1548726977291) },
             ':chunk-signature': { type: 'buffer', data: Buffer.from('ade99cbebb29b010ad92acba7fcd5048e5e1a7f378dd07009a45404903e79a0d', 'hex') },
         }
         const decoded = { rawHeaders, headers, data }
@@ -59,6 +59,38 @@ describe('Event stream encoding', () => {
 
         expect(decodeEvent(encodeEvent(decoded.headers, data)).headers)
             .toStrictEqual(decoded.headers)
+    })
+
+    it('decodes/encodes every possible header type', () => {
+        const build = (...chunks: any[]) => Buffer.concat(chunks.map(x =>
+            Buffer.from(typeof x === 'number' ? [x] : x)))
+
+        const raw = build(
+            2, ':a', 0,
+            2, ':b', 1,
+            2, ':c', 2, 1,
+            2, ':d', 3, 0,2,
+            2, ':e', 4, 0,0,0,3,
+            2, ':f', 5, 0,0,0,0,0,0,0,4,
+            2, ':g', 6, 0,2, 20,21,
+            2, ':h', 7, 0,6, 'héllo',
+            2, ':i', 8, 0,0,0,0,0,0,0,100,
+            2, ':j', 9, 'a'.repeat(16),
+        )
+        const decoded: HeaderArray = [
+            [ ':a', { type: 'boolean', data: true } ],
+            [ ':b', { type: 'boolean', data: false } ],
+            [ ':c', { type: 's8', data: 1 } ],
+            [ ':d', { type: 's16', data: 2 } ],
+            [ ':e', { type: 's32', data: 3 } ],
+            [ ':f', { type: 's64', data: BigInt(4) } ],
+            [ ':g', { type: 'buffer', data: Buffer.from([ 20, 21 ]) } ],
+            [ ':h', { type: 'string', data: 'héllo' } ],
+            [ ':i', { type: 'timestamp', data: new Date(100) } ],
+            [ ':j', { type: 'uuid', data: Buffer.alloc(16, 'a') } ],
+        ]
+        expect(decodeHeaders(raw).rawHeaders).toStrictEqual(decoded)
+        expect(encodeEventHeaders(decoded, 0).slice(12)).toStrictEqual(raw)
     })
 
     it('should throw on invalid event headers', () => {
@@ -82,7 +114,7 @@ describe('Event stream encoding', () => {
         expect(() => decodeHeaders(build( [ 4 ], 'helo', [ 6, 0, 0 ] ))).not.toThrow()
 
         // Invalid type
-        expect(() => decodeHeaders(build( [ 4 ], 'helo', [ 5, 0, 0 ] ))).toThrow()
+        expect(() => decodeHeaders(build( [ 4 ], 'helo', [ 60, 0, 0 ] ))).toThrow()
 
         // Duplicate headers
         expect(() => decodeHeaders(build(
@@ -128,5 +160,8 @@ describe('Event stream encoding', () => {
         // Header name too long
         expect(() => encodeEventHeaders([[ 'a'.repeat(0xFF), { type: 'string', data: 'test' } ]], 0)).not.toThrow()
         expect(() => encodeEventHeaders([[ 'a'.repeat(0xFF + 1), { type: 'string', data: 'test' } ]], 0)).toThrow()
+
+        // UUID has wrong length
+        expect(() => encodeEventHeaders([[ 'test', { type: 'uuid', data: Buffer.alloc(15) } ]], 0)).toThrow()
     })
 })

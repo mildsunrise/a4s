@@ -7,28 +7,54 @@
 
 import crc32 from './util/crc32'
 
+/** MIME type string for an event stream */
+export const MIME_TYPE = 'application/vnd.amazon.eventstream'
+
+/**
+ * Represents the value of a header. `type` specifies the
+ * kind of value, and `data` contains the value itself. Currently,
+ * there are 3 types: `string` (variable length string), `buffer`
+ * (variable length binary content), and `uint64` (encodes a 64-bit
+ * integer).
+ */
 export type HeaderValue = {
     type: 'string'
     data: string
 } | {
-    type: 'uint64'
+    type: 'buffer' | 'uuid'
+    data: Buffer
+} | {
+    type: 's64'
     data: bigint
 } | {
-    type: 'buffer'
-    data: Buffer
+    type: 's32' | 's16' | 's8'
+    data: number
+} | {
+    type: 'boolean'
+    data: boolean
+} | {
+    type: 'timestamp'
+    data: Date
 }
 
 export type HeaderObject = { [name: string]: HeaderValue }
 export type HeaderArray = [ string, HeaderValue ][]
 
-const HEADER_TYPE_BINARY = 6
-const HEADER_TYPE_STRING = 7
-const HEADER_TYPE_UINT64 = 8
+const TYPE_TRUE = 0
+const TYPE_FALSE = 1
+const TYPE_S8 = 2
+const TYPE_S16 = 3
+const TYPE_S32 = 4
+const TYPE_S64 = 5
+const TYPE_BINARY = 6
+const TYPE_STRING = 7
+const TYPE_TIMESTAMP = 8
+const TYPE_UUID = 9
 
 /// PARSING ///
 
 /**
- * Decode header data from an event, into an array of `RawHeader`.
+ * Decode headers.
  *
  * @param data Event header data
  * @throws If there is extra / missing data, if header name is not UTF-8,
@@ -52,16 +78,28 @@ export function decodeHeaders(data: Buffer) {
         // FIXME: throw if not valid UTF-8
         const name = data.slice(consume(nameLength), i).toString()
         const type = data[consume(1)]
-        if (type === HEADER_TYPE_BINARY || type === HEADER_TYPE_STRING) {
+        if (type === TYPE_TRUE || type === TYPE_FALSE) {
+            result.push([ name, { type: 'boolean', data: type === TYPE_TRUE } ])
+        } else if (type === TYPE_BINARY || type === TYPE_STRING) {
             const valueLength = data.readUInt16BE(consume(2))
-            const cdata = data.slice(consume(valueLength), i)
+            const x = data.slice(consume(valueLength), i)
             // FIXME: throw if not valid UTF-8
-            result.push([ name, type === HEADER_TYPE_BINARY ?
-                { type: 'buffer', data: cdata } :
-                { type: 'string', data: cdata.toString() } ])
-        } else if (type === HEADER_TYPE_UINT64) {
-            const cdata = data.slice(consume(8), i).readBigUInt64BE()
-            result.push([ name, { type: 'uint64', data: cdata } ])
+            result.push([ name, type === TYPE_STRING ?
+                { type: 'string', data: x.toString() } :
+                { type: 'buffer', data: x } ])
+        } else if (type === TYPE_S8) {
+            result.push([ name, { type: 's8', data: data.readInt8(consume(1)) } ])
+        } else if (type === TYPE_S16) {
+            result.push([ name, { type: 's16', data: data.readInt16BE(consume(2)) } ])
+        } else if (type === TYPE_S32) {
+            result.push([ name, { type: 's32', data: data.readInt32BE(consume(4)) } ])
+        } else if (type === TYPE_S64) {
+            result.push([ name, { type: 's64', data: data.readBigInt64BE(consume(8)) } ])
+        } else if (type === TYPE_TIMESTAMP) {
+            const x = Number(data.readBigInt64BE(consume(8)))
+            result.push([ name, { type: 'timestamp', data: new Date(x) } ])
+        } else if (type === TYPE_UUID) {
+            result.push([ name, { type: 'uuid', data: data.slice(consume(16), i) } ])
         } else {
             throw new Error(`Unknown header type ${type}`)
         }
@@ -117,11 +155,18 @@ export function decodeEvent(event: Buffer) {
 /// ENCODING ///
 
 function encodeHeaderValue(value: HeaderValue): [ number, Buffer ] {
+    const bp = Buffer.prototype
+    const simpleNumber = <T> (value: { data: T }, type: number, n: number,
+        method: (x: T, o: number) => any): [ number, Buffer ] => {
+        const b = Buffer.allocUnsafe(n)
+        method.call(b, value.data, 0)
+        return [ type, b ]
+    }
+
     if (value.type === 'string' || value.type === 'buffer') {
         const data = value.type === 'string' ?
             Buffer.from(value.data) : value.data
-        const type = value.type === 'string' ?
-            HEADER_TYPE_STRING : HEADER_TYPE_BINARY
+        const type = value.type === 'string' ? TYPE_STRING : TYPE_BINARY
         if (data.length > 0xFFFF) {
             throw new Error('Header value is too big')
         }
@@ -129,31 +174,39 @@ function encodeHeaderValue(value: HeaderValue): [ number, Buffer ] {
         result.writeUInt16BE(data.length, 0)
         data.copy(result, 2)
         return [ type, result ]
-    } else if (value.type === 'uint64') {
-        const result = Buffer.allocUnsafe(8)
-        result.writeBigUInt64BE(value.data)
-        return [ HEADER_TYPE_UINT64, result ]
+    } else if (value.type === 'boolean') {
+        return [ value.data ? TYPE_TRUE : TYPE_FALSE, Buffer.alloc(0) ]
+    } else if (value.type === 's8') {
+        return simpleNumber(value, TYPE_S8, 1, bp.writeInt8)
+    } else if (value.type === 's16') {
+        return simpleNumber(value, TYPE_S16, 2, bp.writeInt16BE)
+    } else if (value.type === 's32') {
+        return simpleNumber(value, TYPE_S32, 4, bp.writeInt32BE)
+    } else if (value.type === 's64') {
+        return simpleNumber(value, TYPE_S64, 8, bp.writeBigInt64BE)
+    } else if (value.type === 'timestamp') {
+        const data = BigInt(value.data.getTime())
+        return simpleNumber({ data }, TYPE_TIMESTAMP, 8, bp.writeBigInt64BE)
+    } else if (value.type === 'uuid') {
+        if (value.data.length !== 16) {
+            throw new TypeError(`UUID data has invalid length ${value.data.length}`)
+        }
+        return [ TYPE_UUID, value.data ]
     }
     throw new Error('Illegal header type specified')
 }
 
 /**
- * Generates a header for an event, which should be prepended to
- * the payload. Use this instead of [[encodeEvent]] if you have a
- * huge payload and want to avoid copying.
- * 
- * **Note**: After the payload, you should also send a big-endian
- * CRC32 of the headers + payload.
+ * Encode event headers
  * 
  * @param headers Event headers
- * @param dataLength Event payload length (in bytes)
  * @throws If header name / value is too big
- * @returns Header bytes
+ * @returns Encoded headers
  */
-export function encodeEventHeaders(headers: HeaderArray | HeaderObject, dataLength: number) {
+export function encodeHeaders(headers: HeaderArray | HeaderObject) {
     const headerArray: HeaderArray = Array.isArray(headers) ? headers :
         Object.keys(headers).map(k => [ k, headers[k] ])
-    const headersData = Buffer.concat(headerArray.map(([ nameStr, valueObj ]) => {
+    return Buffer.concat(headerArray.map(([ nameStr, valueObj ]) => {
         const name = Buffer.from(nameStr)
         if (name.length > 0xFF) {
             throw new Error('Header name is too big')
@@ -166,7 +219,23 @@ export function encodeEventHeaders(headers: HeaderArray | HeaderObject, dataLeng
         value.copy(header, 1 + name.length + 1)
         return header
     }))
+}
 
+/**
+ * Generates a header for an event, which should be prepended to
+ * the payload. Use this instead of [[encodeEvent]] if you have a
+ * huge payload and want to avoid copying.
+ * 
+ * **Note**: After the payload, you should also send a big-endian
+ * CRC32 of the headers + payload.
+ * 
+ * @param headers Event headers
+ * @param dataLength Event payload length (in bytes)
+ * @throws If header name / value is too big, or dataLength is invalid
+ * @returns Header bytes
+ */
+export function encodeEventHeaders(headers: HeaderArray | HeaderObject, dataLength: number) {
+    const headersData = encodeHeaders(headers)
     const event = Buffer.alloc(12 + headersData.length)
     event.writeUInt32BE(event.length + dataLength + 4, 0)
     event.writeUInt32BE(headersData.length, 4)
