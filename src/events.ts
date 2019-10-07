@@ -1,7 +1,8 @@
 /**
- * This module implements *event stream encoding* used for the
- * AWS Transcribe streaming API (see {{encodeEvent}}, {{decodeEvent}}).
- * It doesn't implement any signing logic, just the binary format.
+ * This module implements *event stream encoding* used for services such as
+ * Kinesis, or the Transcribe streaming API (see [[encodeEvent]], [[decodeEvent]]).
+ *
+ * This just implements the binary format, see `events_sign` for the signing logic.
  */
 /** */
 
@@ -12,10 +13,15 @@ export const MIME_TYPE = 'application/vnd.amazon.eventstream'
 
 /**
  * Represents the value of a header. `type` specifies the
- * kind of value, and `data` contains the value itself. Currently,
- * there are 3 types: `string` (variable length string), `buffer`
- * (variable length binary content), and `uint64` (encodes a 64-bit
- * integer).
+ * kind of value, and `data` contains the value itself. `type` can be:
+ *
+ * - `boolean`: Encodes a boolean value.
+ * - `s8`, `s16`, `s32`, `s64`: Encodes a signed 8/16/32/64-bit integer.
+ *   `data` is a `bigint` for `s64` and a `number` for the rest.
+ * - `string`: Encodes a string.
+ * - `buffer`: Encodes a binary buffer.
+ * - `timestamp`: Encodes a millisecond timestamp; `data` is a `Date` object.
+ * - `uuid`: Encodes a UUID; `data` is a 16-byte `Buffer`.
  */
 export type HeaderValue = {
     type: 'string'
