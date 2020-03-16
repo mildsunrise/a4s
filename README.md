@@ -1,5 +1,7 @@
 # a4s
 
+[![Coverage Status](https://coveralls.io/repos/github/mildsunrise/a4s/badge.svg?branch=master)](https://coveralls.io/github/mildsunrise/a4s?branch=master)
+
 This is a set of functions that implement the AWS v4 signature process.
 In addition to implementing the general HTTP case, generic internals
 and service-specific implementations are provided (i.e. S3, Cloudfront, etc.).
