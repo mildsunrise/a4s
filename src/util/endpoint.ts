@@ -12,6 +12,7 @@ export const ENDPOINT_OVERRIDES: {[key: string]: string} = {
 
 export const SERVICE_OVERRIDES: {[key: string]: string} = {
     email: 'ses',
+    transcribestreaming: 'transcribe',
 }
 
 const isRegion = (x: string) => /^[a-z]{1,3}-[a-z]+-\d{1,2}$/i.test(x)
