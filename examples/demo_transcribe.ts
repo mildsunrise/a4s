@@ -9,23 +9,22 @@ import { signRequest, SignedRequest } from '../src/http'
 import { encodeEvent, decodeEvent, MIME_TYPE } from '../src/events'
 import { signEvent, PAYLOAD_EVENT } from '../src/events_sign'
 
-import { readFileSync, fstat, writeFileSync } from 'fs'
+import { readFileSync, writeFileSync } from 'fs'
 import { promisify, inspect } from 'util'
 const delay = promisify(setTimeout)
-
-require('/home/alba/.nvm/versions/node/v12.6.0/lib/node_modules/sslkeylog').hookAll()
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
 const args = process.argv.slice(2)
-if (!accessKey || !secretKey || args.length !== 1) {
-    console.error(`Usage: demo_transcribe.js <region>`)
+if (!accessKey || !secretKey || args.length !== 2) {
+    console.error(`Usage: demo_transcribe.js <region> <file.wav> <out.json>`)
     console.error('Please make sure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set')
+    console.error('For now, make sure the .wav file is 48000 Hz, 16-bit, mono')
     process.exit(1)
 }
 
-const [ region ] = args
-const input = readFileSync('/tmp/test.wav')
+const [ region, audioFile, eventsFile ] = args
+const input = readFileSync(audioFile)
 
 console.log('Connecting to API...')
 connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
@@ -49,6 +48,7 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
     //        when does node add port? should toRequestOptions add host header if not present, and separate host into hostname and port?
     // Is x-amz-content-sha256 needed? what happens if we set hash to empty_hash?
     // Does query signing work?
+    // FIXME: have a maximum frame size
     const result = signRequest({ accessKey, secretKey }, request,
         { set: true, setContentHash: true })
     const stream = session.request({
@@ -111,9 +111,8 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
         })
 
         while (i < input.length) {
-            //console.log(`(${Math.round(i/input.length * 100)}%)\r`)
             sendAudio(input.slice(i, i += chunkSize))
-            await delay(chunkSize / 96000 * 1000)
+            await delay(chunkSize / (48000*2) * 1000)
         }
 
         // Send final chunk
@@ -122,13 +121,11 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
 
         stream.on('end', () => {
             session.close()
-            writeFileSync('/tmp/events.json', JSON.stringify(events) + '\n')
+            writeFileSync(eventsFile, JSON.stringify(events) + '\n')
         })
     })
 })
 
-
-// FIXME: have a maximum frame size
 
 
 /** Represents a set of transcription results from the server to the client. It contains one or more segments of the transcription. */
