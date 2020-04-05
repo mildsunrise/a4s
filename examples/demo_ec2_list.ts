@@ -1,5 +1,5 @@
 /**
- * Demo CLI tool that makes a LIST request to a bucket.
+ * Demo CLI tool that lists EC2 instances
  */
 
 import { get } from 'https'
