@@ -16,10 +16,10 @@ const delay = promisify(setTimeout)
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
 const args = process.argv.slice(2)
-if (!accessKey || !secretKey || args.length !== 2) {
+if (!accessKey || !secretKey || args.length !== 3) {
     console.error(`Usage: demo_transcribe.js <region> <file.wav> <out.json>`)
     console.error('Please make sure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set')
-    console.error('For now, make sure the .wav file is 48000 Hz, 16-bit, mono')
+    console.error('For now, make sure the .wav file is 48000 Hz, signed 16-bit LE, mono')
     process.exit(1)
 }
 
@@ -38,9 +38,11 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
         headers: {
             'content-type': MIME_TYPE,
             'x-amz-target': 'com.amazonaws.transcribe.Transcribe.StartStreamTranscription',
-            'x-amzn-transcribe-language-code': 'es-US',
+            'x-amzn-transcribe-language-code': 'en-US',
             'x-amzn-transcribe-media-encoding': 'pcm',
             'x-amzn-transcribe-sample-rate': 48000,
+            'x-amzn-transcribe-enable-partial-results-stabilization': 'true',
+            'x-amzn-transcribe-partial-results-stability': 'low',
         },
         body: { hash: PAYLOAD_EVENT },
     }
@@ -176,4 +178,8 @@ export interface Item {
     Type: 'PRONUNCIATION' | 'PUNCTUATION'
     /** The word or punctuation that was recognized in the input audio. */
     Content: string
+
+    VocabularyFilterMatch: boolean
+    Confidence: number // between 0 and 1
+    Stable: boolean
 }
