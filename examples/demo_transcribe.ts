@@ -10,21 +10,22 @@ import { encodeEvent, decodeEvent, MIME_TYPE } from '../src/events'
 import { signEvent, PAYLOAD_EVENT } from '../src/events_sign'
 
 import { readFileSync, writeFileSync } from 'fs'
-import { promisify, inspect } from 'util'
-const delay = promisify(setTimeout)
+import { inspect } from 'util'
 
 const accessKey = process.env.AWS_ACCESS_KEY_ID!
 const secretKey = process.env.AWS_SECRET_ACCESS_KEY!
 const args = process.argv.slice(2)
-if (!accessKey || !secretKey || args.length !== 3) {
-    console.error(`Usage: demo_transcribe.js <region> <file.wav> <out.json>`)
+if (!accessKey || !secretKey || args.length !== 2) {
+    console.error(`Usage: demo_transcribe.js <region> <out.json>`)
     console.error('Please make sure AWS_ACCESS_KEY_ID and AWS_SECRET_ACCESS_KEY are set')
     console.error('For now, make sure the .wav file is 48000 Hz, signed 16-bit LE, mono')
     process.exit(1)
 }
 
-const [ region, audioFile, eventsFile ] = args
-const input = readFileSync(audioFile)
+const [ region, eventsFile ] = args
+
+let dataCallback: (x: Buffer) => void = () => {}
+process.stdin.on('data', c => dataCallback(c))
 
 console.log('Connecting to API...')
 connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
@@ -60,7 +61,7 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
         ':path': (request.url as any).pathname, // add searchParams
     })
 
-    stream.on('response', async response => {
+    stream.on('response', response => {
         console.log('Received response:', { ...response })
         if (response[':status'] !== 200) {
             stream.on('end', () => process.exit(1)).pipe(process.stdout)
@@ -76,7 +77,17 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
             stream.write(encodeEvent(x.params, event))
             lastSignature = x.signature.toString('hex')
         }
-        function sendAudio(chunk: Buffer = Buffer.alloc(0)) {
+        // It's not documented anywhere, but chunks must have consistent sizes
+        // and can't be too big either
+        let aBuffer = Buffer.alloc(0), chunkSize = 4096
+        function sendAudio(chunk: Buffer) {
+            aBuffer = Buffer.concat([aBuffer, chunk])
+            while (aBuffer.length >= chunkSize) {
+                sendAudio_(aBuffer.slice(0, chunkSize))
+                aBuffer = aBuffer.slice(chunkSize)
+            }
+        }
+        function sendAudio_(chunk: Buffer = Buffer.alloc(0)) {
             sendEvent(encodeEvent({
                 ':content-type': { type: 'string', data: 'application/octet-stream' },
                 ':event-type': { type: 'string', data: 'AudioEvent' },
@@ -86,7 +97,6 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
 
         const sendStart = Date.now()
         const events: any[] = []
-        let i = 0, chunkSize = 8 * 1024
 
         stream.on('data', chunk => {
             const { headers, data } = decodeEvent(chunk)
@@ -112,14 +122,14 @@ connect(`https://transcribestreaming.${region}.amazonaws.com`, session => {
             }
         })
 
-        while (i < input.length) {
-            sendAudio(input.slice(i, i += chunkSize))
-            await delay(chunkSize / (48000*2) * 1000)
-        }
+        // start piping data from stdin
+        dataCallback = sendAudio
 
-        // Send final chunk
-        sendEvent()
-        stream.end()
+        process.stdin.on('end', () => {
+            // Send final chunk
+            sendEvent()
+            stream.end()
+        })
 
         stream.on('end', () => {
             session.close()
