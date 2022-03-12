@@ -8,21 +8,21 @@ and service-specific implementations are provided (i.e. S3, Cloudfront, etc.).
 
 ## Modules
 
- - [**`core`: Generic message signing**](https://a4s.alba.sh/docs/modules/_core_.html)
+ - [**`core`: Generic message signing**](https://a4s.alba.sh/docs/modules/core.html)
 
- - [**`http`: HTTP signing**](https://a4s.alba.sh/docs/modules/_http_.html)
+ - [**`http`: HTTP signing**](https://a4s.alba.sh/docs/modules/http.html)
    - `Authorization` request signing
    - Query signing (presigned URLs)
 
- - [**`s3`: S3 service specific**](https://a4s.alba.sh/docs/modules/_s3_.html)
+ - [**`s3`: S3 service specific**](https://a4s.alba.sh/docs/modules/s3.html)
    - `Authorization` request signing
      - Unsigned payload
-     - [**`s3.chunked`: Chunked Upload (streaming payload)**](https://a4s.alba.sh/docs/modules/_s3_chunked_.html)
+     - [**`s3.chunked`: Chunked Upload (streaming payload)**](https://a4s.alba.sh/docs/modules/s3_chunked.html)
    - Query signing (presigned URLs)
    - POST form authorization (signed policy)
 
- - [**`events`: Event Stream encoding**](https://a4s.alba.sh/docs/modules/_events_.html)
-   - [**`events_sign`: Event signing**](https://a4s.alba.sh/docs/modules/_events_sign_.html)
+ - [**`events`: Event Stream encoding**](https://a4s.alba.sh/docs/modules/events.html)
+   - [**`events_sign`: Event signing**](https://a4s.alba.sh/docs/modules/events_sign.html)
 
 #### A note about HTTP headers
 

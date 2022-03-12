@@ -4,8 +4,8 @@
  * which signs the payload progressively, without requiring you to
  * calculate its digest first. See [[signS3ChunkedRequest]] and
  * [[createS3PayloadSigner]].
+ * @module
  */
-/** */
 
 import { createHash } from 'crypto'
 import { Transform } from 'stream'

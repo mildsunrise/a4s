@@ -3,8 +3,9 @@
  * Kinesis, or the Transcribe streaming API (see [[encodeEvent]], [[decodeEvent]]).
  *
  * This just implements the binary format, see `events_sign` for the signing logic.
+ *
+ * @module
  */
-/** */
 
 import crc32 from './util/crc32'
 

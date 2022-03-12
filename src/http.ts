@@ -5,8 +5,9 @@
  * This module calculates the canonical request, signs its digest using the
  * `core` module, and also builds the `Authorization` header (or the query
  * parameters).
+ *
+ * @module
  */
-/** */
 
 import { URL, URLSearchParams } from 'url'
 import { unescape } from 'querystring'

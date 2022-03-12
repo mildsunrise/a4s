@@ -1,7 +1,7 @@
 /**
  * Utilities to normalize and work with requests and headers.
+ * @module
  */
-/** */
 
 import { SignedRequest } from '../http'
 import { RequestOptions } from 'http'

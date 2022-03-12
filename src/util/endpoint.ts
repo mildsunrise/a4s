@@ -1,6 +1,7 @@
 /**
  * Utilities for inferring service / region from endpoints (hosts)
  * and vice versa.
+ * @module
  */
 
 /** Default region for AWS requests */

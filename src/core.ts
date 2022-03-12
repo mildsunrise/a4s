@@ -4,8 +4,8 @@
  * This module contains only common signing logic (i.e. not HTTP specific);
  * main functions are [[formatTimestamp]] to generate timestamps, [[getSigning]]
  * to derive the signing key, and [[signDigest]] or [[signChunk]] to sign a hash.
+ * @module
  */
-/** */
 
 import { createHmac } from 'crypto'
 

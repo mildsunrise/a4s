@@ -2,8 +2,8 @@
  * Module for calculating signed CRC32.
  * Adapted from https://github.com/SheetJS/js-crc32:
  * (C) 2014-present SheetJS -- http://sheetjs.com
+ * @module
  */
-/** */
 
 const T = new Int32Array(256).map((_,n) => [...Array(8)]
     .reduce(c => (c>>>1) ^ ((c&1) * 0xEDB88320), n))

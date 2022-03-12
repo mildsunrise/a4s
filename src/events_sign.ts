@@ -5,8 +5,9 @@
  * The mechanics of a signed event stream are pretty similar to `s3_chunked`,
  * each chunk (now an 'event') is prepended a signature which depends on the
  * previous signature. However, here each chunk can have different timestamps.
+ *
+ * @module
  */
-/** */
 
 import { formatTimestamp, Credentials, SignOptions, signChunk, getSigning, SigningData } from './core'
 import { hashBody } from './http'

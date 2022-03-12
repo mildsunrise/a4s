@@ -5,8 +5,9 @@
  * Additionally there's POST form parameter authentication,
  * which is designed mainly to allow users to upload files
  * to S3 directly from their browser. See [[signS3Policy]].
+ *
+ * @module
  */
-/** */
 
 import { URLSearchParams, URL } from 'url'
 
