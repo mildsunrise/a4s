@@ -25,6 +25,7 @@
   "scripts": {
     "clean": "rm -rf dist",
     "build": "tsc",
+    "prepare": "rm -rf dist; tsc",
     "test": "jest --coverage",
     "test:watch": "jest --coverage --watch",
     "docs": "typedoc --out docs",
